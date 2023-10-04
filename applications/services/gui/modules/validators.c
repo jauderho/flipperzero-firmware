@@ -1,6 +1,6 @@
-#include <furi.h>
 #include "validators.h"
 #include <storage/storage.h>
+#include <furi.h>
 
 struct ValidatorIsFile {
     char* app_path_folder;
@@ -8,7 +8,7 @@ struct ValidatorIsFile {
     char* current_name;
 };
 
-bool validator_is_file_callback(const char* text, string_t error, void* context) {
+bool validator_is_file_callback(const char* text, FuriString* error, void* context) {
     furi_assert(context);
     ValidatorIsFile* instance = context;
 
@@ -18,17 +18,14 @@ bool validator_is_file_callback(const char* text, string_t error, void* context)
         }
     }
 
-    bool ret = true;
-    string_t path;
-    string_init_printf(path, "%s/%s%s", instance->app_path_folder, text, instance->app_extension);
+    FuriString* path = furi_string_alloc_printf(
+        "%s/%s%s", instance->app_path_folder, text, instance->app_extension);
     Storage* storage = furi_record_open(RECORD_STORAGE);
-    if(storage_common_stat(storage, string_get_cstr(path), NULL) == FSE_OK) {
-        ret = false;
-        string_printf(error, "This name\nexists!\nChoose\nanother one.");
-    } else {
-        ret = true;
+    const bool ret = storage_common_stat(storage, furi_string_get_cstr(path), NULL) != FSE_OK;
+    if(!ret) {
+        furi_string_printf(error, "This name\nexists!\nChoose\nanother one.");
     }
-    string_clear(path);
+    furi_string_free(path);
     furi_record_close(RECORD_STORAGE);
 
     return ret;

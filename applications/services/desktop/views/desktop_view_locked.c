@@ -4,6 +4,7 @@
 #include <gui/elements.h>
 #include <gui/icon.h>
 #include <gui/view.h>
+#include <assets_icons.h>
 #include <portmacro.h>
 
 #include <desktop/desktop_settings.h>
@@ -98,6 +99,7 @@ void desktop_view_locked_update(DesktopViewLocked* locked_view) {
 
     if(view_state == DesktopViewLockedStateDoorsClosing &&
        !desktop_view_locked_doors_move(model)) {
+        locked_view->callback(DesktopLockedEventDoorsClosed, locked_view->context);
         model->view_state = DesktopViewLockedStateLocked;
     } else if(view_state == DesktopViewLockedStateLockedHintShown) {
         model->view_state = DesktopViewLockedStateLocked;
@@ -159,7 +161,7 @@ static bool desktop_view_locked_input(InputEvent* event, void* context) {
     view_commit_model(locked_view->view, is_changed);
 
     if(view_state == DesktopViewLockedStateUnlocked) {
-        return view_state != DesktopViewLockedStateUnlocked;
+        return false;
     } else if(view_state == DesktopViewLockedStateLocked && pin_locked) {
         locked_view->callback(DesktopLockedEventShowPinInput, locked_view->context);
     } else if(

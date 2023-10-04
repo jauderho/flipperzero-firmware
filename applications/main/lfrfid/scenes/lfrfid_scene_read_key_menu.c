@@ -1,4 +1,5 @@
 #include "../lfrfid_i.h"
+#include <dolphin/dolphin.h>
 
 typedef enum {
     SubmenuIndexSave,
@@ -38,11 +39,12 @@ bool lfrfid_scene_read_key_menu_on_event(void* context, SceneManagerEvent event)
             scene_manager_next_scene(app->scene_manager, LfRfidSceneWrite);
             consumed = true;
         } else if(event.event == SubmenuIndexSave) {
-            string_reset(app->file_name);
+            furi_string_reset(app->file_name);
             scene_manager_next_scene(app->scene_manager, LfRfidSceneSaveName);
             consumed = true;
         } else if(event.event == SubmenuIndexEmulate) {
             scene_manager_next_scene(app->scene_manager, LfRfidSceneEmulate);
+            dolphin_deed(DolphinDeedRfidEmulate);
             consumed = true;
         }
         scene_manager_set_scene_state(app->scene_manager, LfRfidSceneReadKeyMenu, event.event);

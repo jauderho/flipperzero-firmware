@@ -1,12 +1,11 @@
 #pragma once
 
-#include "m-string.h"
-
 #include <furi.h>
 #include <furi_hal.h>
 
 #include <gui/gui.h>
 #include <gui/view.h>
+#include <assets_icons.h>
 #include <gui/view_dispatcher.h>
 #include <gui/scene_manager.h>
 #include <cli/cli.h>
@@ -41,8 +40,9 @@
 
 #define LFRFID_APP_FOLDER ANY_PATH("lfrfid")
 #define LFRFID_SD_FOLDER EXT_PATH("lfrfid")
-#define LFRFID_APP_EXTENSION ".rfid"
-#define LFRFID_APP_SHADOW_EXTENSION ".shd"
+#define LFRFID_APP_FILENAME_PREFIX "RFID"
+#define LFRFID_APP_FILENAME_EXTENSION ".rfid"
+#define LFRFID_APP_SHADOW_FILENAME_EXTENSION ".shd"
 
 #define LFRFID_APP_RAW_ASK_EXTENSION ".ask.raw"
 #define LFRFID_APP_RAW_PSK_EXTENSION ".psk.raw"
@@ -86,9 +86,9 @@ struct LfRfid {
     Widget* widget;
 
     char text_store[LFRFID_TEXT_STORE_SIZE + 1];
-    string_t file_path;
-    string_t file_name;
-    string_t raw_file_name;
+    FuriString* file_path;
+    FuriString* file_name;
+    FuriString* raw_file_name;
 
     ProtocolDict* dict;
     ProtocolId protocol_id;
@@ -128,9 +128,9 @@ bool lfrfid_load_key_from_file_select(LfRfid* app);
 
 bool lfrfid_delete_key(LfRfid* app);
 
-bool lfrfid_load_key_data(LfRfid* app, string_t path, bool show_dialog);
+bool lfrfid_load_key_data(LfRfid* app, FuriString* path, bool show_dialog);
 
-bool lfrfid_save_key_data(LfRfid* app, string_t path);
+bool lfrfid_save_key_data(LfRfid* app, FuriString* path);
 
 void lfrfid_make_app_folder(LfRfid* app);
 

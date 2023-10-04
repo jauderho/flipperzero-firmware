@@ -3,9 +3,9 @@
 #include "../archive_i.h"
 #include <storage/storage.h>
 
-#define TAB_RIGHT InputKeyRight // Default tab swith direction
+#define TAB_RIGHT InputKeyRight // Default tab switch direction
 #define TAB_DEFAULT ArchiveTabFavorites // Start tab
-#define FILE_LIST_BUF_LEN 100
+#define FILE_LIST_BUF_LEN 50
 
 static const char* tab_default_paths[] = {
     [ArchiveTabFavorites] = "/app:favorites",
@@ -16,6 +16,7 @@ static const char* tab_default_paths[] = {
     [ArchiveTabInfrared] = ANY_PATH("infrared"),
     [ArchiveTabBadUsb] = ANY_PATH("badusb"),
     [ArchiveTabU2f] = "/app:u2f",
+    [ArchiveTabApplications] = ANY_PATH("apps"),
     [ArchiveTabBrowser] = STORAGE_ANY_PATH_PREFIX,
 };
 
@@ -27,6 +28,7 @@ static const char* known_ext[] = {
     [ArchiveFileTypeInfrared] = ".ir",
     [ArchiveFileTypeBadUsb] = ".txt",
     [ArchiveFileTypeU2f] = "?",
+    [ArchiveFileTypeApplication] = ".fap",
     [ArchiveFileTypeUpdateManifest] = ".fuf",
     [ArchiveFileTypeFolder] = "?",
     [ArchiveFileTypeUnknown] = "*",
@@ -41,6 +43,7 @@ static const ArchiveFileTypeEnum known_type[] = {
     [ArchiveTabInfrared] = ArchiveFileTypeInfrared,
     [ArchiveTabBadUsb] = ArchiveFileTypeBadUsb,
     [ArchiveTabU2f] = ArchiveFileTypeU2f,
+    [ArchiveTabApplications] = ArchiveFileTypeApplication,
     [ArchiveTabBrowser] = ArchiveFileTypeUnknown,
 };
 
@@ -61,6 +64,7 @@ inline bool archive_is_known_app(ArchiveFileTypeEnum type) {
 }
 
 bool archive_is_item_in_array(ArchiveBrowserViewModel* model, uint32_t idx);
+bool archive_is_file_list_load_required(ArchiveBrowserViewModel* model);
 void archive_update_offset(ArchiveBrowserView* browser);
 void archive_update_focus(ArchiveBrowserView* browser, const char* target);
 
@@ -84,6 +88,6 @@ void archive_show_file_menu(ArchiveBrowserView* browser, bool show);
 void archive_favorites_move_mode(ArchiveBrowserView* browser, bool active);
 
 void archive_switch_tab(ArchiveBrowserView* browser, InputKey key);
-void archive_enter_dir(ArchiveBrowserView* browser, string_t name);
+void archive_enter_dir(ArchiveBrowserView* browser, FuriString* name);
 void archive_leave_dir(ArchiveBrowserView* browser);
 void archive_refresh_dir(ArchiveBrowserView* browser);

@@ -1,11 +1,11 @@
-#include "assets_icons.h"
 #include "file_browser_app_i.h"
-#include "gui/modules/file_browser.h"
-#include "m-string.h"
-#include <furi.h>
-#include <furi_hal.h>
+#include <file_browser_test_icons.h>
+
+#include <gui/modules/file_browser.h>
 #include <storage/storage.h>
 #include <lib/toolbox/path.h>
+#include <furi.h>
+#include <furi_hal.h>
 
 static bool file_browser_app_custom_event_callback(void* context, uint32_t event) {
     furi_assert(context);
@@ -47,9 +47,9 @@ FileBrowserApp* file_browser_app_alloc(char* arg) {
 
     app->widget = widget_alloc();
 
-    string_init(app->file_path);
+    app->file_path = furi_string_alloc();
     app->file_browser = file_browser_alloc(app->file_path);
-    file_browser_configure(app->file_browser, "*", true, &I_badusb_10px, true);
+    file_browser_configure(app->file_browser, "*", NULL, true, false, &I_badusb_10px, true);
 
     view_dispatcher_add_view(
         app->view_dispatcher, FileBrowserAppViewStart, widget_get_view(app->widget));
@@ -84,7 +84,7 @@ void file_browser_app_free(FileBrowserApp* app) {
     furi_record_close(RECORD_NOTIFICATION);
     furi_record_close(RECORD_DIALOGS);
 
-    string_clear(app->file_path);
+    furi_string_free(app->file_path);
 
     free(app);
 }

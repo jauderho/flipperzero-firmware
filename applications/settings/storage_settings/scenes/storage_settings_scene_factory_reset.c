@@ -24,7 +24,7 @@ void storage_settings_scene_factory_reset_on_enter(void* context) {
     dialog_ex_set_header(dialog_ex, "Confirm Factory Reset", 64, 10, AlignCenter, AlignCenter);
     dialog_ex_set_text(
         dialog_ex,
-        "Internal storage will be erased\r\nData and setting will be lost!",
+        "Internal storage will be erased\r\nData and settings will be lost!",
         64,
         32,
         AlignCenter,
@@ -49,13 +49,13 @@ bool storage_settings_scene_factory_reset_on_event(void* context, SceneManagerEv
         case DialogExResultRight:
             counter++;
             if(counter < STORAGE_SETTINGS_SCENE_FACTORY_RESET_CONFIRM_COUNT) {
-                string_printf(
+                furi_string_printf(
                     app->text_string,
                     "%ld presses left",
                     STORAGE_SETTINGS_SCENE_FACTORY_RESET_CONFIRM_COUNT - counter);
                 dialog_ex_set_text(
                     app->dialog_ex,
-                    string_get_cstr(app->text_string),
+                    furi_string_get_cstr(app->text_string),
                     64,
                     32,
                     AlignCenter,
@@ -83,5 +83,5 @@ void storage_settings_scene_factory_reset_on_exit(void* context) {
 
     dialog_ex_reset(dialog_ex);
 
-    string_reset(app->text_string);
+    furi_string_reset(app->text_string);
 }

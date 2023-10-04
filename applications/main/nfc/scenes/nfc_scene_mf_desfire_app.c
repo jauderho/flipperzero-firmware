@@ -51,23 +51,18 @@ void nfc_scene_mf_desfire_app_on_enter(void* context) {
             nfc_scene_mf_desfire_app_submenu_callback,
             nfc);
 
-        uint16_t cap = NFC_TEXT_STORE_SIZE;
-        char* buf = nfc->text_store;
+        FuriString* label = furi_string_alloc();
         int idx = SubmenuIndexDynamic;
         for(MifareDesfireFile* file = app->file_head; file; file = file->next) {
-            int size = snprintf(buf, cap, "File %d", file->id);
-            if(size < 0 || size >= cap) {
-                FURI_LOG_W(
-                    TAG,
-                    "Exceeded NFC_TEXT_STORE_SIZE when preparing file id strings; menu truncated");
-                break;
-            }
-            char* label = buf;
-            cap -= size + 1;
-            buf += size + 1;
+            furi_string_printf(label, "File %d", file->id);
             submenu_add_item(
-                nfc->submenu, label, idx++, nfc_scene_mf_desfire_app_submenu_callback, nfc);
+                nfc->submenu,
+                furi_string_get_cstr(label),
+                idx++,
+                nfc_scene_mf_desfire_app_submenu_callback,
+                nfc);
         }
+        furi_string_free(label);
 
         view_dispatcher_switch_to_view(nfc->view_dispatcher, NfcViewMenu);
     }
@@ -84,7 +79,7 @@ bool nfc_scene_mf_desfire_app_on_event(void* context, SceneManagerEvent event) {
         } else {
             MifareDesfireApplication* app = nfc_scene_mf_desfire_app_get_app(nfc);
             TextBox* text_box = nfc->text_box;
-            string_reset(nfc->text_box_store);
+            furi_string_reset(nfc->text_box_store);
             if(event.event == SubmenuIndexAppInfo) {
                 mf_df_cat_application_info(app, nfc->text_box_store);
             } else {
@@ -98,7 +93,7 @@ bool nfc_scene_mf_desfire_app_on_event(void* context, SceneManagerEvent event) {
                 }
                 mf_df_cat_file(file, nfc->text_box_store);
             }
-            text_box_set_text(text_box, string_get_cstr(nfc->text_box_store));
+            text_box_set_text(text_box, furi_string_get_cstr(nfc->text_box_store));
             scene_manager_set_scene_state(nfc->scene_manager, NfcSceneMfDesfireApp, state | 1);
             view_dispatcher_switch_to_view(nfc->view_dispatcher, NfcViewTextBox);
             consumed = true;
@@ -120,6 +115,6 @@ void nfc_scene_mf_desfire_app_on_exit(void* context) {
     // Clear views
     popup_reset(nfc->popup);
     text_box_reset(nfc->text_box);
-    string_reset(nfc->text_box_store);
+    furi_string_reset(nfc->text_box_store);
     submenu_reset(nfc->submenu);
 }

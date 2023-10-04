@@ -9,7 +9,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <m-string.h>
+#include <furi.h>
 #include "canvas.h"
 
 #ifdef __cplusplus
@@ -30,6 +30,23 @@ extern "C" {
  * @param   progress    progress (0.0 - 1.0)
  */
 void elements_progress_bar(Canvas* canvas, uint8_t x, uint8_t y, uint8_t width, float progress);
+
+/** Draw progress bar with text.
+ *
+ * @param   canvas      Canvas instance
+ * @param   x           progress bar position on X axis
+ * @param   y           progress bar position on Y axis
+ * @param   width       progress bar width
+ * @param   progress    progress (0.0 - 1.0)
+ * @param   text        text to draw
+ */
+void elements_progress_bar_with_text(
+    Canvas* canvas,
+    uint8_t x,
+    uint8_t y,
+    uint8_t width,
+    float progress,
+    const char* text);
 
 /** Draw scrollbar on canvas at specific position.
  *
@@ -90,7 +107,7 @@ void elements_button_center(Canvas* canvas, const char* str);
  *
  * @param   canvas                  Canvas instance
  * @param   x, y                    coordinates based on align param
- * @param   horizontal, vertical    aligment of multiline text
+ * @param   horizontal, vertical    alignment of multiline text
  * @param   text                    string (possible multiline)
  */
 void elements_multiline_text_aligned(
@@ -190,7 +207,26 @@ void elements_bubble_str(
  * @param   string  string to trim
  * @param   width   max width
  */
-void elements_string_fit_width(Canvas* canvas, string_t string, uint8_t width);
+void elements_string_fit_width(Canvas* canvas, FuriString* string, uint8_t width);
+
+/** Draw scrollable text line
+ *
+ * @param      canvas    The canvas
+ * @param[in]  x         X coordinate
+ * @param[in]  y         Y coordinate
+ * @param[in]  width     The width
+ * @param      string    The string
+ * @param[in]  scroll    The scroll counter: 0 - no scroll, any other number - scroll. Just count up, everything else will be calculated on the inside.
+ * @param[in]  ellipsis  The ellipsis flag: true to add ellipse
+ */
+void elements_scrollable_text_line(
+    Canvas* canvas,
+    uint8_t x,
+    uint8_t y,
+    uint8_t width,
+    FuriString* string,
+    size_t scroll,
+    bool ellipsis);
 
 /** Draw text box element
  *

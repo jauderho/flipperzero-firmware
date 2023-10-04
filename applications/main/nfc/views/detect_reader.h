@@ -5,6 +5,13 @@
 
 typedef struct DetectReader DetectReader;
 
+typedef enum {
+    DetectReaderStateStart,
+    DetectReaderStateReaderDetected,
+    DetectReaderStateReaderLost,
+    DetectReaderStateDone,
+} DetectReaderState;
+
 typedef void (*DetectReaderDoneCallback)(void* context);
 
 DetectReader* detect_reader_alloc();
@@ -20,4 +27,10 @@ void detect_reader_set_callback(
     DetectReaderDoneCallback callback,
     void* context);
 
-void detect_reader_inc_nonce_cnt(DetectReader* detect_reader);
+void detect_reader_set_nonces_max(DetectReader* detect_reader, uint16_t nonces_max);
+
+void detect_reader_set_nonces_collected(DetectReader* detect_reader, uint16_t nonces_collected);
+
+void detect_reader_set_state(DetectReader* detect_reader, DetectReaderState state);
+
+void detect_reader_set_uid(DetectReader* detect_reader, uint8_t* uid, uint8_t uid_len);

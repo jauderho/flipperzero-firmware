@@ -2,7 +2,6 @@
 
 #include <furi.h>
 #include "filesystem_api_internal.h"
-#include <m-string.h>
 #include <m-list.h>
 
 #ifdef __cplusplus
@@ -19,9 +18,8 @@ typedef struct {
 
 typedef struct {
     File* file;
-    StorageType type;
     void* file_data;
-    string_t path;
+    FuriString* path;
 } StorageFile;
 
 typedef enum {
@@ -39,10 +37,10 @@ void storage_file_set(StorageFile* obj, const StorageFile* src);
 void storage_file_clear(StorageFile* obj);
 
 void storage_data_init(StorageData* storage);
-bool storage_data_lock(StorageData* storage);
-bool storage_data_unlock(StorageData* storage);
 StorageStatus storage_data_status(StorageData* storage);
 const char* storage_data_status_text(StorageData* storage);
+void storage_data_timestamp(StorageData* storage);
+uint32_t storage_data_get_timestamp(StorageData* storage);
 
 LIST_DEF(
     StorageFileList,
@@ -56,19 +54,21 @@ struct StorageData {
     const FS_Api* fs_api;
     StorageApi api;
     void* data;
-    FuriMutex* mutex;
     StorageStatus status;
     StorageFileList_t files;
+    uint32_t timestamp;
 };
 
 bool storage_has_file(const File* file, StorageData* storage_data);
-bool storage_path_already_open(string_t path, StorageFileList_t files);
+bool storage_path_already_open(FuriString* path, StorageData* storage_data);
 
 void storage_set_storage_file_data(const File* file, void* file_data, StorageData* storage);
 void* storage_get_storage_file_data(const File* file, StorageData* storage);
 
-void storage_push_storage_file(File* file, string_t path, StorageType type, StorageData* storage);
+void storage_push_storage_file(File* file, FuriString* path, StorageData* storage);
 bool storage_pop_storage_file(File* file, StorageData* storage);
+
+size_t storage_open_files_count(StorageData* storage);
 
 #ifdef __cplusplus
 }

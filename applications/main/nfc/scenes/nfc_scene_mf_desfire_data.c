@@ -33,21 +33,18 @@ void nfc_scene_mf_desfire_data_on_enter(void* context) {
         nfc_scene_mf_desfire_data_submenu_callback,
         nfc);
 
-    uint16_t cap = NFC_TEXT_STORE_SIZE;
-    char* buf = nfc->text_store;
+    FuriString* label = furi_string_alloc();
     int idx = SubmenuIndexDynamic;
     for(MifareDesfireApplication* app = data->app_head; app; app = app->next) {
-        int size = snprintf(buf, cap, "App %02x%02x%02x", app->id[0], app->id[1], app->id[2]);
-        if(size < 0 || size >= cap) {
-            FURI_LOG_W(
-                TAG, "Exceeded NFC_TEXT_STORE_SIZE when preparing app id strings; menu truncated");
-            break;
-        }
-        char* label = buf;
-        cap -= size + 1;
-        buf += size + 1;
-        submenu_add_item(submenu, label, idx++, nfc_scene_mf_desfire_data_submenu_callback, nfc);
+        furi_string_printf(label, "App %02x%02x%02x", app->id[0], app->id[1], app->id[2]);
+        submenu_add_item(
+            submenu,
+            furi_string_get_cstr(label),
+            idx++,
+            nfc_scene_mf_desfire_data_submenu_callback,
+            nfc);
     }
+    furi_string_free(label);
 
     if(state >= MifareDesfireDataStateItem) {
         submenu_set_selected_item(
@@ -67,10 +64,10 @@ bool nfc_scene_mf_desfire_data_on_event(void* context, SceneManagerEvent event) 
 
     if(event.type == SceneManagerEventTypeCustom) {
         TextBox* text_box = nfc->text_box;
-        string_reset(nfc->text_box_store);
+        furi_string_reset(nfc->text_box_store);
         if(event.event == SubmenuIndexCardInfo) {
             mf_df_cat_card_info(data, nfc->text_box_store);
-            text_box_set_text(text_box, string_get_cstr(nfc->text_box_store));
+            text_box_set_text(text_box, furi_string_get_cstr(nfc->text_box_store));
             view_dispatcher_switch_to_view(nfc->view_dispatcher, NfcViewTextBox);
             scene_manager_set_scene_state(
                 nfc->scene_manager,
@@ -102,6 +99,6 @@ void nfc_scene_mf_desfire_data_on_exit(void* context) {
 
     // Clear views
     text_box_reset(nfc->text_box);
-    string_reset(nfc->text_box_store);
+    furi_string_reset(nfc->text_box_store);
     submenu_reset(nfc->submenu);
 }

@@ -17,7 +17,7 @@ void crypto_cli_print_usage() {
         "\tstore_key <key_slot:int> <key_type:str> <key_size:int> <key_data:hex>\t - Store key in secure enclave. !!! NON-REVERSABLE OPERATION - READ MANUAL FIRST !!!\r\n");
 };
 
-void crypto_cli_encrypt(Cli* cli, string_t args) {
+void crypto_cli_encrypt(Cli* cli, FuriString* args) {
     int key_slot = 0;
     bool key_loaded = false;
     uint8_t iv[16];
@@ -33,7 +33,7 @@ void crypto_cli_encrypt(Cli* cli, string_t args) {
             break;
         }
 
-        if(!furi_hal_crypto_store_load_key(key_slot, iv)) {
+        if(!furi_hal_crypto_enclave_load_key(key_slot, iv)) {
             printf("Unable to load key from slot %d", key_slot);
             break;
         }
@@ -41,8 +41,8 @@ void crypto_cli_encrypt(Cli* cli, string_t args) {
 
         printf("Enter plain text and press Ctrl+C to complete encryption:\r\n");
 
-        string_t input;
-        string_init(input);
+        FuriString* input;
+        input = furi_string_alloc();
         char c;
         while(cli_read(cli, (uint8_t*)&c, 1) == 1) {
             if(c == CliSymbolAsciiETX) {
@@ -51,14 +51,14 @@ void crypto_cli_encrypt(Cli* cli, string_t args) {
             } else if(c >= 0x20 && c < 0x7F) {
                 putc(c, stdout);
                 fflush(stdout);
-                string_push_back(input, c);
+                furi_string_push_back(input, c);
             } else if(c == CliSymbolAsciiCR) {
                 printf("\r\n");
-                string_cat_str(input, "\r\n");
+                furi_string_cat(input, "\r\n");
             }
         }
 
-        size_t size = string_size(input);
+        size_t size = furi_string_size(input);
         if(size > 0) {
             // C-string null termination and block alignments
             size++;
@@ -66,9 +66,10 @@ void crypto_cli_encrypt(Cli* cli, string_t args) {
             if(remain) {
                 size = size - remain + 16;
             }
-            string_reserve(input, size);
+            furi_string_reserve(input, size);
             uint8_t* output = malloc(size);
-            if(!furi_hal_crypto_encrypt((const uint8_t*)string_get_cstr(input), output, size)) {
+            if(!furi_hal_crypto_encrypt(
+                   (const uint8_t*)furi_string_get_cstr(input), output, size)) {
                 printf("Failed to encrypt input");
             } else {
                 printf("Hex-encoded encrypted data:\r\n");
@@ -83,15 +84,15 @@ void crypto_cli_encrypt(Cli* cli, string_t args) {
             printf("No input");
         }
 
-        string_clear(input);
+        furi_string_free(input);
     } while(0);
 
     if(key_loaded) {
-        furi_hal_crypto_store_unload_key(key_slot);
+        furi_hal_crypto_enclave_unload_key(key_slot);
     }
 }
 
-void crypto_cli_decrypt(Cli* cli, string_t args) {
+void crypto_cli_decrypt(Cli* cli, FuriString* args) {
     int key_slot = 0;
     bool key_loaded = false;
     uint8_t iv[16];
@@ -107,7 +108,7 @@ void crypto_cli_decrypt(Cli* cli, string_t args) {
             break;
         }
 
-        if(!furi_hal_crypto_store_load_key(key_slot, iv)) {
+        if(!furi_hal_crypto_enclave_load_key(key_slot, iv)) {
             printf("Unable to load key from slot %d", key_slot);
             break;
         }
@@ -115,8 +116,8 @@ void crypto_cli_decrypt(Cli* cli, string_t args) {
 
         printf("Enter Hex-encoded data and press Ctrl+C to complete decryption:\r\n");
 
-        string_t hex_input;
-        string_init(hex_input);
+        FuriString* hex_input;
+        hex_input = furi_string_alloc();
         char c;
         while(cli_read(cli, (uint8_t*)&c, 1) == 1) {
             if(c == CliSymbolAsciiETX) {
@@ -125,14 +126,14 @@ void crypto_cli_decrypt(Cli* cli, string_t args) {
             } else if(c >= 0x20 && c < 0x7F) {
                 putc(c, stdout);
                 fflush(stdout);
-                string_push_back(hex_input, c);
+                furi_string_push_back(hex_input, c);
             } else if(c == CliSymbolAsciiCR) {
                 printf("\r\n");
             }
         }
 
-        string_strim(hex_input);
-        size_t hex_size = string_size(hex_input);
+        furi_string_trim(hex_input);
+        size_t hex_size = furi_string_size(hex_input);
         if(hex_size > 0 && hex_size % 2 == 0) {
             size_t size = hex_size / 2;
             uint8_t* input = malloc(size);
@@ -141,7 +142,7 @@ void crypto_cli_decrypt(Cli* cli, string_t args) {
             if(args_read_hex_bytes(hex_input, input, size)) {
                 if(furi_hal_crypto_decrypt(input, output, size)) {
                     printf("Decrypted data:\r\n");
-                    printf("%s\r\n", output);
+                    printf("%s\r\n", output); //-V576
                 } else {
                     printf("Failed to decrypt\r\n");
                 }
@@ -155,18 +156,18 @@ void crypto_cli_decrypt(Cli* cli, string_t args) {
             printf("Invalid or empty input");
         }
 
-        string_clear(hex_input);
+        furi_string_free(hex_input);
     } while(0);
 
     if(key_loaded) {
-        furi_hal_crypto_store_unload_key(key_slot);
+        furi_hal_crypto_enclave_unload_key(key_slot);
     }
 }
 
-void crypto_cli_has_key(Cli* cli, string_t args) {
+void crypto_cli_has_key(Cli* cli, FuriString* args) {
     UNUSED(cli);
     int key_slot = 0;
-    uint8_t iv[16];
+    uint8_t iv[16] = {0};
 
     do {
         if(!args_read_int_and_trim(args, &key_slot) || !(key_slot > 0 && key_slot <= 100)) {
@@ -174,23 +175,23 @@ void crypto_cli_has_key(Cli* cli, string_t args) {
             break;
         }
 
-        if(!furi_hal_crypto_store_load_key(key_slot, iv)) {
+        if(!furi_hal_crypto_enclave_load_key(key_slot, iv)) {
             printf("Unable to load key from slot %d", key_slot);
             break;
         }
 
         printf("Successfully loaded key from slot %d", key_slot);
 
-        furi_hal_crypto_store_unload_key(key_slot);
+        furi_hal_crypto_enclave_unload_key(key_slot);
     } while(0);
 }
 
-void crypto_cli_store_key(Cli* cli, string_t args) {
+void crypto_cli_store_key(Cli* cli, FuriString* args) {
     UNUSED(cli);
     int key_slot = 0;
     int key_size = 0;
-    string_t key_type;
-    string_init(key_type);
+    FuriString* key_type;
+    key_type = furi_string_alloc();
 
     uint8_t data[32 + 12] = {};
     FuriHalCryptoKey key;
@@ -207,19 +208,19 @@ void crypto_cli_store_key(Cli* cli, string_t args) {
             break;
         }
 
-        if(string_cmp_str(key_type, "master") == 0) {
+        if(furi_string_cmp_str(key_type, "master") == 0) {
             if(key_slot != 0) {
                 printf("Master keyslot must be is 0");
                 break;
             }
             key.type = FuriHalCryptoKeyTypeMaster;
-        } else if(string_cmp_str(key_type, "simple") == 0) {
+        } else if(furi_string_cmp_str(key_type, "simple") == 0) {
             if(key_slot < 1 || key_slot > 99) {
                 printf("Simple keyslot must be in range");
                 break;
             }
             key.type = FuriHalCryptoKeyTypeSimple;
-        } else if(string_cmp_str(key_type, "encrypted") == 0) {
+        } else if(furi_string_cmp_str(key_type, "encrypted") == 0) {
             key.type = FuriHalCryptoKeyTypeEncrypted;
             data_size += 12;
         } else {
@@ -248,40 +249,40 @@ void crypto_cli_store_key(Cli* cli, string_t args) {
         }
 
         if(key_slot > 0) {
-            uint8_t iv[16];
+            uint8_t iv[16] = {0};
             if(key_slot > 1) {
-                if(!furi_hal_crypto_store_load_key(key_slot - 1, iv)) {
+                if(!furi_hal_crypto_enclave_load_key(key_slot - 1, iv)) {
                     printf(
                         "Slot %d before %d is empty, which is not allowed",
                         key_slot - 1,
                         key_slot);
                     break;
                 }
-                furi_hal_crypto_store_unload_key(key_slot - 1);
+                furi_hal_crypto_enclave_unload_key(key_slot - 1);
             }
 
-            if(furi_hal_crypto_store_load_key(key_slot, iv)) {
-                furi_hal_crypto_store_unload_key(key_slot);
+            if(furi_hal_crypto_enclave_load_key(key_slot, iv)) {
+                furi_hal_crypto_enclave_unload_key(key_slot);
                 printf("Key slot %d is already used", key_slot);
                 break;
             }
         }
 
         uint8_t slot;
-        if(furi_hal_crypto_store_add_key(&key, &slot)) {
+        if(furi_hal_crypto_enclave_store_key(&key, &slot)) {
             printf("Success. Stored to slot: %d", slot);
         } else {
             printf("Failure");
         }
     } while(0);
 
-    string_clear(key_type);
+    furi_string_free(key_type);
 }
 
-static void crypto_cli(Cli* cli, string_t args, void* context) {
+static void crypto_cli(Cli* cli, FuriString* args, void* context) {
     UNUSED(context);
-    string_t cmd;
-    string_init(cmd);
+    FuriString* cmd;
+    cmd = furi_string_alloc();
 
     do {
         if(!args_read_string_and_trim(args, cmd)) {
@@ -289,22 +290,22 @@ static void crypto_cli(Cli* cli, string_t args, void* context) {
             break;
         }
 
-        if(string_cmp_str(cmd, "encrypt") == 0) {
+        if(furi_string_cmp_str(cmd, "encrypt") == 0) {
             crypto_cli_encrypt(cli, args);
             break;
         }
 
-        if(string_cmp_str(cmd, "decrypt") == 0) {
+        if(furi_string_cmp_str(cmd, "decrypt") == 0) {
             crypto_cli_decrypt(cli, args);
             break;
         }
 
-        if(string_cmp_str(cmd, "has_key") == 0) {
+        if(furi_string_cmp_str(cmd, "has_key") == 0) {
             crypto_cli_has_key(cli, args);
             break;
         }
 
-        if(string_cmp_str(cmd, "store_key") == 0) {
+        if(furi_string_cmp_str(cmd, "store_key") == 0) {
             crypto_cli_store_key(cli, args);
             break;
         }
@@ -312,7 +313,7 @@ static void crypto_cli(Cli* cli, string_t args, void* context) {
         crypto_cli_print_usage();
     } while(false);
 
-    string_clear(cmd);
+    furi_string_free(cmd);
 }
 
 void crypto_on_system_start() {

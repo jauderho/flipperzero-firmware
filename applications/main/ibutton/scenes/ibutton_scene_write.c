@@ -1,6 +1,4 @@
 #include "../ibutton_i.h"
-#include "m-string.h"
-#include "toolbox/path.h"
 
 typedef enum {
     iButtonSceneWriteStateDefault,
@@ -14,80 +12,46 @@ static void ibutton_scene_write_callback(void* context, iButtonWorkerWriteResult
 
 void ibutton_scene_write_on_enter(void* context) {
     iButton* ibutton = context;
-    Popup* popup = ibutton->popup;
+    furi_assert(ibutton->write_mode != iButtonWriteModeInvalid);
+
     iButtonKey* key = ibutton->key;
-    iButtonWorker* worker = ibutton->key_worker;
+    iButtonWorker* worker = ibutton->worker;
+    const iButtonProtocolId protocol_id = ibutton_key_get_protocol_id(key);
 
-    const uint8_t* key_data = ibutton_key_get_data_p(key);
+    Widget* widget = ibutton->widget;
+    FuriString* tmp = furi_string_alloc();
 
-    string_t key_name;
-    string_init(key_name);
-    if(string_end_with_str_p(ibutton->file_path, IBUTTON_APP_EXTENSION)) {
-        path_extract_filename(ibutton->file_path, key_name, true);
-    }
+    widget_add_icon_element(widget, 3, 10, &I_iButtonKey_49x44);
 
-    uint8_t line_count = 2;
+    furi_string_printf(
+        tmp,
+        "%s\n[%s]",
+        ibutton->key_name,
+        ibutton_protocols_get_name(ibutton->protocols, protocol_id));
 
-    // check that stored key has name
-    if(!string_empty_p(key_name)) {
-        ibutton_text_store_set(ibutton, "writing\n%s", string_get_cstr(key_name));
-        line_count = 2;
-    } else {
-        // if not, show key data
-        switch(ibutton_key_get_type(key)) {
-        case iButtonKeyDS1990:
-            ibutton_text_store_set(
-                ibutton,
-                "writing\n%02X %02X %02X %02X\n%02X %02X %02X %02X",
-                key_data[0],
-                key_data[1],
-                key_data[2],
-                key_data[3],
-                key_data[4],
-                key_data[5],
-                key_data[6],
-                key_data[7]);
-            line_count = 3;
-            break;
-        case iButtonKeyCyfral:
-            ibutton_text_store_set(ibutton, "writing\n%02X %02X", key_data[0], key_data[1]);
-            line_count = 2;
-            break;
-        case iButtonKeyMetakom:
-            ibutton_text_store_set(
-                ibutton,
-                "writing\n%02X %02X %02X %02X",
-                key_data[0],
-                key_data[1],
-                key_data[2],
-                key_data[3]);
-            line_count = 2;
-            break;
-        }
-    }
-
-    switch(line_count) {
-    case 3:
-        popup_set_header(popup, "iButton", 82, 18, AlignCenter, AlignBottom);
-        popup_set_text(popup, ibutton->text_store, 82, 22, AlignCenter, AlignTop);
-        break;
-
-    default:
-        popup_set_header(popup, "iButton", 82, 24, AlignCenter, AlignBottom);
-        popup_set_text(popup, ibutton->text_store, 82, 28, AlignCenter, AlignTop);
-        break;
-    }
-
-    popup_set_icon(popup, 2, 10, &I_iButtonKey_49x44);
-
-    view_dispatcher_switch_to_view(ibutton->view_dispatcher, iButtonViewPopup);
+    widget_add_text_box_element(
+        widget, 52, 38, 75, 26, AlignCenter, AlignCenter, furi_string_get_cstr(tmp), true);
 
     ibutton_worker_write_set_callback(worker, ibutton_scene_write_callback, ibutton);
-    ibutton_worker_write_start(worker, key);
 
-    string_clear(key_name);
+    furi_string_set(tmp, "iButton\nwriting ");
+
+    if(ibutton->write_mode == iButtonWriteModeBlank) {
+        furi_string_cat(tmp, "Blank");
+        ibutton_worker_write_blank_start(worker, key);
+
+    } else if(ibutton->write_mode == iButtonWriteModeCopy) {
+        furi_string_cat(tmp, "Copy");
+        ibutton_worker_write_copy_start(worker, key);
+    }
+
+    widget_add_string_multiline_element(
+        widget, 88, 10, AlignCenter, AlignTop, FontPrimary, furi_string_get_cstr(tmp));
 
     ibutton_notification_message(ibutton, iButtonNotificationMessageEmulateStart);
+    view_dispatcher_switch_to_view(ibutton->view_dispatcher, iButtonViewWidget);
+
+    furi_string_free(tmp);
 }
 
 bool ibutton_scene_write_on_event(void* context, SceneManagerEvent event) {
@@ -114,11 +78,10 @@ bool ibutton_scene_write_on_event(void* context, SceneManagerEvent event) {
 
 void ibutton_scene_write_on_exit(void* context) {
     iButton* ibutton = context;
-    Popup* popup = ibutton->popup;
-    ibutton_worker_stop(ibutton->key_worker);
-    popup_set_header(popup, NULL, 0, 0, AlignCenter, AlignBottom);
-    popup_set_text(popup, NULL, 0, 0, AlignCenter, AlignTop);
-    popup_set_icon(popup, 0, 0, NULL);
+    ibutton->write_mode = iButtonWriteModeInvalid;
+
+    ibutton_worker_stop(ibutton->worker);
+    widget_reset(ibutton->widget);
 
     ibutton_notification_message(ibutton, iButtonNotificationMessageBlinkStop);
 }

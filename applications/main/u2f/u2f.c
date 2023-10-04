@@ -7,10 +7,10 @@
 #include <littlefs/lfs_util.h> // for lfs_tobe32
 
 #include "toolbox/sha256.h"
-#include "toolbox/hmac_sha256.h"
+#include "hmac_sha256.h"
 #include "micro-ecc/uECC.h"
 
-#define TAG "U2F"
+#define TAG "U2f"
 #define WORKER_TAG TAG "Worker"
 
 #define U2F_CMD_REGISTER 0x01

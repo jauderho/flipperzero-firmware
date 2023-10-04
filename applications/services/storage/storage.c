@@ -5,13 +5,14 @@
 #include "storage/storage_glue.h"
 #include "storages/storage_int.h"
 #include "storages/storage_ext.h"
+#include <assets_icons.h>
 
 #define STORAGE_TICK 1000
 
 #define ICON_SD_MOUNTED &I_SDcardMounted_11x8
 #define ICON_SD_ERROR &I_SDcardFail_11x8
 
-#define TAG RECORD_STORAGE
+#define TAG "Storage"
 
 static void storage_app_sd_icon_draw_callback(Canvas* canvas, void* context) {
     furi_assert(canvas);
@@ -38,6 +39,7 @@ Storage* storage_app_alloc() {
 
     for(uint8_t i = 0; i < STORAGE_COUNT; i++) {
         storage_data_init(&app->storage[i]);
+        storage_data_timestamp(&app->storage[i]);
     }
 
 #ifndef FURI_RAM_EXEC

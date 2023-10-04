@@ -9,7 +9,7 @@
 #include "storage/filesystem_api_defines.h"
 #include "storage/storage.h"
 #include <stdint.h>
-#include <lib/toolbox/md5.h>
+#include <lib/toolbox/md5_calc.h>
 #include <lib/toolbox/path.h>
 #include <update_util/lfs_backup.h>
 
@@ -138,6 +138,41 @@ static void rpc_system_storage_info_process(const PB_Main* request, void* contex
     furi_record_close(RECORD_STORAGE);
 }
 
+static void rpc_system_storage_timestamp_process(const PB_Main* request, void* context) {
+    furi_assert(request);
+    furi_assert(context);
+    furi_assert(request->which_content == PB_Main_storage_timestamp_request_tag);
+
+    FURI_LOG_D(TAG, "Timestamp");
+
+    RpcStorageSystem* rpc_storage = context;
+    RpcSession* session = rpc_storage->session;
+    furi_assert(session);
+
+    rpc_system_storage_reset_state(rpc_storage, session, true);
+
+    PB_Main* response = malloc(sizeof(PB_Main));
+    response->command_id = request->command_id;
+
+    Storage* fs_api = furi_record_open(RECORD_STORAGE);
+
+    const char* path = request->content.storage_timestamp_request.path;
+    uint32_t timestamp = 0;
+    FS_Error error = storage_common_timestamp(fs_api, path, &timestamp);
+
+    response->command_status = rpc_system_storage_get_error(error);
+    response->which_content = PB_Main_empty_tag;
+
+    if(error == FSE_OK) {
+        response->which_content = PB_Main_storage_timestamp_response_tag;
+        response->content.storage_timestamp_response.timestamp = timestamp;
+    }
+
+    rpc_send_and_release(session, response);
+    free(response);
+    furi_record_close(RECORD_STORAGE);
+}
+
 static void rpc_system_storage_stat_process(const PB_Main* request, void* context) {
     furi_assert(request);
     furi_assert(context);
@@ -166,7 +201,7 @@ static void rpc_system_storage_stat_process(const PB_Main* request, void* contex
     if(error == FSE_OK) {
         response->which_content = PB_Main_storage_stat_response_tag;
         response->content.storage_stat_response.has_file = true;
-        response->content.storage_stat_response.file.type = (fileinfo.flags & FSF_DIRECTORY) ?
+        response->content.storage_stat_response.file.type = file_info_is_dir(&fileinfo) ?
                                                                 PB_Storage_File_FileType_DIR :
                                                                 PB_Storage_File_FileType_FILE;
         response->content.storage_stat_response.file.size = fileinfo.size;
@@ -207,6 +242,23 @@ static void rpc_system_storage_list_root(const PB_Main* request, void* context) 
     rpc_send_and_release(session, &response);
 }
 
+static bool rpc_system_storage_list_filter(
+    const PB_Storage_ListRequest* request,
+    const FileInfo* fileinfo,
+    const char* name) {
+    bool result = false;
+
+    do {
+        if(!path_contains_only_ascii(name)) break;
+        if(request->filter_max_size) {
+            if(fileinfo->size > request->filter_max_size) break;
+        }
+        result = true;
+    } while(false);
+
+    return result;
+}
+
 static void rpc_system_storage_list_process(const PB_Main* request, void* context) {
     furi_assert(request);
     furi_assert(context);
@@ -218,9 +270,11 @@ static void rpc_system_storage_list_process(const PB_Main* request, void* contex
     RpcSession* session = rpc_storage->session;
     furi_assert(session);
 
+    const PB_Storage_ListRequest* list_request = &request->content.storage_list_request;
+
     rpc_system_storage_reset_state(rpc_storage, session, true);
 
-    if(!strcmp(request->content.storage_list_request.path, "/")) {
+    if(!strcmp(list_request->path, "/")) {
         rpc_system_storage_list_root(request, context);
         return;
     }
@@ -236,10 +290,15 @@ static void rpc_system_storage_list_process(const PB_Main* request, void* contex
     };
     PB_Storage_ListResponse* list = &response.content.storage_list_response;
 
+    bool include_md5 = list_request->include_md5;
+    FuriString* md5 = furi_string_alloc();
+    FuriString* md5_path = furi_string_alloc();
+    File* file = storage_file_alloc(fs_api);
+
     bool finish = false;
     int i = 0;
 
-    if(!storage_dir_open(dir, request->content.storage_list_request.path)) {
+    if(!storage_dir_open(dir, list_request->path)) {
         response.command_status = rpc_system_storage_get_file_error(dir);
         response.which_content = PB_Main_empty_tag;
         finish = true;
@@ -249,19 +308,29 @@ static void rpc_system_storage_list_process(const PB_Main* request, void* contex
         FileInfo fileinfo;
         char* name = malloc(MAX_NAME_LENGTH + 1);
         if(storage_dir_read(dir, &fileinfo, name, MAX_NAME_LENGTH)) {
-            if(path_contains_only_ascii(name)) {
+            if(rpc_system_storage_list_filter(list_request, &fileinfo, name)) {
                 if(i == COUNT_OF(list->file)) {
                     list->file_count = i;
                     response.has_next = true;
                     rpc_send_and_release(session, &response);
                     i = 0;
                 }
-                list->file[i].type = (fileinfo.flags & FSF_DIRECTORY) ?
-                                         PB_Storage_File_FileType_DIR :
-                                         PB_Storage_File_FileType_FILE;
+                list->file[i].type = file_info_is_dir(&fileinfo) ? PB_Storage_File_FileType_DIR :
+                                                                   PB_Storage_File_FileType_FILE;
                 list->file[i].size = fileinfo.size;
                 list->file[i].data = NULL;
                 list->file[i].name = name;
+
+                if(include_md5 && !file_info_is_dir(&fileinfo)) {
+                    furi_string_printf(md5_path, "%s/%s", list_request->path, name); //-V576
+
+                    if(md5_string_calc_file(file, furi_string_get_cstr(md5_path), md5, NULL)) {
+                        char* md5sum = list->file[i].md5sum;
+                        size_t md5sum_size = sizeof(list->file[i].md5sum);
+                        snprintf(md5sum, md5sum_size, "%s", furi_string_get_cstr(md5));
+                    }
+                }
+
                 ++i;
             } else {
                 free(name);
@@ -276,8 +345,11 @@ static void rpc_system_storage_list_process(const PB_Main* request, void* contex
     response.has_next = false;
     rpc_send_and_release(session, &response);
 
+    furi_string_free(md5);
+    furi_string_free(md5_path);
     storage_dir_close(dir);
     storage_file_free(dir);
+    storage_file_free(file);
 
     furi_record_close(RECORD_STORAGE);
 }
@@ -295,7 +367,7 @@ static void rpc_system_storage_read_process(const PB_Main* request, void* contex
 
     rpc_system_storage_reset_state(rpc_storage, session, true);
 
-    /* use same message memory to send reponse */
+    /* use same message memory to send response */
     PB_Main* response = malloc(sizeof(PB_Main));
     const char* path = request->content.storage_read_request.path;
     Storage* fs_api = furi_record_open(RECORD_STORAGE);
@@ -405,6 +477,10 @@ static void rpc_system_storage_write_process(const PB_Main* request, void* conte
     if(!fs_operation_success) {
         send_response = true;
         command_status = rpc_system_storage_get_file_error(file);
+        if(command_status == PB_CommandStatus_OK) {
+            // Report errors not handled by underlying APIs
+            command_status = PB_CommandStatus_ERROR_STORAGE_INTERNAL;
+        }
     }
 
     if(send_response) {
@@ -419,7 +495,7 @@ static bool rpc_system_storage_is_dir_is_empty(Storage* fs_api, const char* path
     FileInfo fileinfo;
     bool is_dir_is_empty = true;
     FS_Error error = storage_common_stat(fs_api, path, &fileinfo);
-    if((error == FSE_OK) && (fileinfo.flags & FSF_DIRECTORY)) {
+    if((error == FSE_OK) && file_info_is_dir(&fileinfo)) {
         File* dir = storage_file_alloc(fs_api);
         if(storage_dir_open(dir, path)) {
             char* name = malloc(MAX_NAME_LENGTH);
@@ -531,23 +607,10 @@ static void rpc_system_storage_md5sum_process(const PB_Main* request, void* cont
 
     Storage* fs_api = furi_record_open(RECORD_STORAGE);
     File* file = storage_file_alloc(fs_api);
+    FuriString* md5 = furi_string_alloc();
+    FS_Error file_error;
 
-    if(storage_file_open(file, filename, FSAM_READ, FSOM_OPEN_EXISTING)) {
-        const uint16_t size_to_read = 512;
-        const uint8_t hash_size = 16;
-        uint8_t* data = malloc(size_to_read);
-        uint8_t* hash = malloc(sizeof(uint8_t) * hash_size);
-        md5_context* md5_ctx = malloc(sizeof(md5_context));
-
-        md5_starts(md5_ctx);
-        while(true) {
-            uint16_t read_size = storage_file_read(file, data, size_to_read);
-            if(read_size == 0) break;
-            md5_update(md5_ctx, data, read_size);
-        }
-        md5_finish(md5_ctx, hash);
-        free(md5_ctx);
-
+    if(md5_string_calc_file(file, filename, md5, &file_error)) {
         PB_Main response = {
             .command_id = request->command_id,
             .command_status = PB_CommandStatus_OK,
@@ -557,21 +620,15 @@ static void rpc_system_storage_md5sum_process(const PB_Main* request, void* cont
 
         char* md5sum = response.content.storage_md5sum_response.md5sum;
         size_t md5sum_size = sizeof(response.content.storage_md5sum_response.md5sum);
-        (void)md5sum_size;
-        furi_assert(hash_size <= ((md5sum_size - 1) / 2));
-        for(uint8_t i = 0; i < hash_size; i++) {
-            md5sum += snprintf(md5sum, md5sum_size, "%02x", hash[i]);
-        }
+        snprintf(md5sum, md5sum_size, "%s", furi_string_get_cstr(md5));
 
-        free(hash);
-        free(data);
-        storage_file_close(file);
         rpc_send_and_release(session, &response);
     } else {
         rpc_send_and_release_empty(
-            session, request->command_id, rpc_system_storage_get_file_error(file));
+            session, request->command_id, rpc_system_storage_get_error(file_error));
     }
 
+    furi_string_free(md5);
     storage_file_free(file);
 
     furi_record_close(RECORD_STORAGE);
@@ -667,6 +724,9 @@ void* rpc_system_storage_alloc(RpcSession* session) {
 
     rpc_handler.message_handler = rpc_system_storage_info_process;
     rpc_add_handler(session, PB_Main_storage_info_request_tag, &rpc_handler);
+
+    rpc_handler.message_handler = rpc_system_storage_timestamp_process;
+    rpc_add_handler(session, PB_Main_storage_timestamp_request_tag, &rpc_handler);
 
     rpc_handler.message_handler = rpc_system_storage_stat_process;
     rpc_add_handler(session, PB_Main_storage_stat_request_tag, &rpc_handler);

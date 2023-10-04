@@ -2,6 +2,7 @@
 
 #include <gui/gui.h>
 #include <gui/view.h>
+#include <assets_icons.h>
 #include <gui/view_stack.h>
 #include <gui/view_dispatcher.h>
 #include <gui/scene_manager.h>
@@ -29,6 +30,7 @@
 #include "scenes/infrared_scene.h"
 #include "views/infrared_progress_view.h"
 #include "views/infrared_debug_view.h"
+#include "views/infrared_move_view.h"
 
 #include "rpc/rpc_app.h"
 
@@ -68,6 +70,8 @@ typedef struct {
     InfraredEditTarget edit_target : 8;
     InfraredEditMode edit_mode : 8;
     int32_t current_button_index;
+    int32_t current_button_index_move_orig;
+    uint32_t last_transmit_time;
 } InfraredAppState;
 
 struct Infrared {
@@ -91,12 +95,13 @@ struct Infrared {
 
     ViewStack* view_stack;
     InfraredDebugView* debug_view;
+    InfraredMoveView* move_view;
 
     ButtonPanel* button_panel;
     Loading* loading;
     InfraredProgressView* progress;
 
-    string_t file_path;
+    FuriString* file_path;
     char text_store[INFRARED_TEXT_STORE_NUM][INFRARED_TEXT_STORE_SIZE + 1];
     InfraredAppState app_state;
 
@@ -111,6 +116,7 @@ typedef enum {
     InfraredViewPopup,
     InfraredViewStack,
     InfraredViewDebugView,
+    InfraredViewMove,
 } InfraredView;
 
 typedef enum {

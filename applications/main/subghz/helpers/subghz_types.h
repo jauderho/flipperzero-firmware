@@ -1,6 +1,5 @@
 #pragma once
 
-#include "m-string.h"
 #include <furi.h>
 #include <furi_hal.h>
 
@@ -29,6 +28,20 @@ typedef enum {
     SubGhzHopperStateRSSITimeOut,
 } SubGhzHopperState;
 
+/** SubGhzSpeakerState state */
+typedef enum {
+    SubGhzSpeakerStateDisable,
+    SubGhzSpeakerStateShutdown,
+    SubGhzSpeakerStateEnable,
+} SubGhzSpeakerState;
+
+/** SubGhzRadioDeviceType */
+typedef enum {
+    SubGhzRadioDeviceTypeAuto,
+    SubGhzRadioDeviceTypeInternal,
+    SubGhzRadioDeviceTypeExternalCC1101,
+} SubGhzRadioDeviceType;
+
 /** SubGhzRxKeyState state */
 typedef enum {
     SubGhzRxKeyStateIDLE,
@@ -47,6 +60,7 @@ typedef enum {
     SubGhzLoadKeyStateUnknown,
     SubGhzLoadKeyStateOK,
     SubGhzLoadKeyStateParseErr,
+    SubGhzLoadKeyStateProtocolDescriptionErr,
 } SubGhzLoadKeyState;
 
 /** SubGhzLock */
@@ -66,16 +80,11 @@ typedef enum {
     SubGhzViewIdFrequencyAnalyzer,
     SubGhzViewIdReadRAW,
 
-    SubGhzViewIdStatic,
-    SubGhzViewIdTestCarrier,
-    SubGhzViewIdTestPacket,
 } SubGhzViewId;
 
-struct SubGhzPresetDefinition {
-    string_t name;
-    uint32_t frequency;
-    uint8_t* data;
-    size_t data_size;
-};
-
-typedef struct SubGhzPresetDefinition SubGhzPresetDefinition;
+/** SubGhz load type file */
+typedef enum {
+    SubGhzLoadTypeFileNoLoad,
+    SubGhzLoadTypeFileKey,
+    SubGhzLoadTypeFileRaw,
+} SubGhzLoadTypeFile;

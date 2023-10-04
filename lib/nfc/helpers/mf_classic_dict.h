@@ -6,9 +6,13 @@
 #include <lib/toolbox/stream/file_stream.h>
 #include <lib/toolbox/stream/buffered_file_stream.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     MfClassicDictTypeUser,
-    MfClassicDictTypeFlipper,
+    MfClassicDictTypeSystem,
     MfClassicDictTypeUnitTest,
 } MfClassicDictType;
 
@@ -48,11 +52,11 @@ bool mf_classic_dict_rewind(MfClassicDict* dict);
 
 bool mf_classic_dict_is_key_present(MfClassicDict* dict, uint8_t* key);
 
-bool mf_classic_dict_is_key_present_str(MfClassicDict* dict, string_t key);
+bool mf_classic_dict_is_key_present_str(MfClassicDict* dict, FuriString* key);
 
 bool mf_classic_dict_get_next_key(MfClassicDict* dict, uint64_t* key);
 
-bool mf_classic_dict_get_next_key_str(MfClassicDict* dict, string_t key);
+bool mf_classic_dict_get_next_key_str(MfClassicDict* dict, FuriString* key);
 
 /** Get key at target offset as uint64_t
  *
@@ -72,7 +76,7 @@ bool mf_classic_dict_get_key_at_index(MfClassicDict* dict, uint64_t* key, uint32
  *
  * @return     true on success
  */
-bool mf_classic_dict_get_key_at_index_str(MfClassicDict* dict, string_t key, uint32_t target);
+bool mf_classic_dict_get_key_at_index_str(MfClassicDict* dict, FuriString* key, uint32_t target);
 
 bool mf_classic_dict_add_key(MfClassicDict* dict, uint8_t* key);
 
@@ -83,11 +87,11 @@ bool mf_classic_dict_add_key(MfClassicDict* dict, uint8_t* key);
  *
  * @return     true on success
  */
-bool mf_classic_dict_add_key_str(MfClassicDict* dict, string_t key);
+bool mf_classic_dict_add_key_str(MfClassicDict* dict, FuriString* key);
 
 bool mf_classic_dict_find_index(MfClassicDict* dict, uint8_t* key, uint32_t* target);
 
-bool mf_classic_dict_find_index_str(MfClassicDict* dict, string_t key, uint32_t* target);
+bool mf_classic_dict_find_index_str(MfClassicDict* dict, FuriString* key, uint32_t* target);
 
 /** Delete key at target offset
  *
@@ -97,3 +101,7 @@ bool mf_classic_dict_find_index_str(MfClassicDict* dict, string_t key, uint32_t*
  * @return     true on success
  */
 bool mf_classic_dict_delete_index(MfClassicDict* dict, uint32_t target);
+
+#ifdef __cplusplus
+}
+#endif

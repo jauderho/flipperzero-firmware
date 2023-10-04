@@ -3,6 +3,7 @@
 typedef enum {
     SubGhzRpcStateIdle,
     SubGhzRpcStateLoaded,
+    SubGhzRpcStateTx,
 } SubGhzRpcState;
 
 void subghz_scene_rpc_on_enter(void* context) {
@@ -38,21 +39,37 @@ bool subghz_scene_rpc_on_event(void* context, SceneManagerEvent event) {
             view_dispatcher_stop(subghz->view_dispatcher);
         } else if(event.event == SubGhzCustomEventSceneRpcButtonPress) {
             bool result = false;
-            if((subghz->txrx->txrx_state == SubGhzTxRxStateSleep) &&
-               (state == SubGhzRpcStateLoaded)) {
-                subghz_blink_start(subghz);
-                result = subghz_tx_start(subghz, subghz->txrx->fff_data);
-                result = true;
+            if((state == SubGhzRpcStateLoaded)) {
+                switch(
+                    subghz_txrx_tx_start(subghz->txrx, subghz_txrx_get_fff_data(subghz->txrx))) {
+                case SubGhzTxRxStartTxStateErrorOnlyRx:
+                    rpc_system_app_set_error_code(subghz->rpc_ctx, SubGhzErrorTypeOnlyRX);
+                    rpc_system_app_set_error_text(
+                        subghz->rpc_ctx,
+                        "Transmission on this frequency is restricted in your region");
+                    break;
+                case SubGhzTxRxStartTxStateErrorParserOthers:
+                    rpc_system_app_set_error_code(subghz->rpc_ctx, SubGhzErrorTypeParserOthers);
+                    rpc_system_app_set_error_text(
+                        subghz->rpc_ctx, "Error in protocol parameters description");
+                    break;
+
+                default: //if(SubGhzTxRxStartTxStateOk)
+                    result = true;
+                    subghz_blink_start(subghz);
+                    state = SubGhzRpcStateTx;
+                    break;
+                }
             }
             rpc_system_app_confirm(subghz->rpc_ctx, RpcAppEventButtonPress, result);
         } else if(event.event == SubGhzCustomEventSceneRpcButtonRelease) {
             bool result = false;
-            if(subghz->txrx->txrx_state == SubGhzTxRxStateTx) {
+            if(state == SubGhzRpcStateTx) {
+                subghz_txrx_stop(subghz->txrx);
                 subghz_blink_stop(subghz);
-                subghz_tx_stop(subghz);
-                subghz_sleep(subghz);
                 result = true;
             }
+            state = SubGhzRpcStateIdle;
             rpc_system_app_confirm(subghz->rpc_ctx, RpcAppEventButtonRelease, result);
         } else if(event.event == SubGhzCustomEventSceneRpcLoad) {
             bool result = false;
@@ -61,20 +78,23 @@ bool subghz_scene_rpc_on_event(void* context, SceneManagerEvent event) {
                 if(subghz_key_load(subghz, arg, false)) {
                     scene_manager_set_scene_state(
                         subghz->scene_manager, SubGhzSceneRpc, SubGhzRpcStateLoaded);
-                    string_set_str(subghz->file_path, arg);
+                    furi_string_set(subghz->file_path, arg);
                     result = true;
-                    string_t file_name;
-                    string_init(file_name);
+                    FuriString* file_name;
+                    file_name = furi_string_alloc();
                     path_extract_filename(subghz->file_path, file_name, true);
 
                     snprintf(
                         subghz->file_name_tmp,
                         SUBGHZ_MAX_LEN_NAME,
                         "loaded\n%s",
-                        string_get_cstr(file_name));
+                        furi_string_get_cstr(file_name));
                     popup_set_text(popup, subghz->file_name_tmp, 89, 44, AlignCenter, AlignTop);
 
-                    string_clear(file_name);
+                    furi_string_free(file_name);
+                } else {
+                    rpc_system_app_set_error_code(subghz->rpc_ctx, SubGhzErrorTypeParseFile);
+                    rpc_system_app_set_error_text(subghz->rpc_ctx, "Cannot parse file");
                 }
             }
             rpc_system_app_confirm(subghz->rpc_ctx, RpcAppEventLoadFile, result);
@@ -85,10 +105,9 @@ bool subghz_scene_rpc_on_event(void* context, SceneManagerEvent event) {
 
 void subghz_scene_rpc_on_exit(void* context) {
     SubGhz* subghz = context;
-
-    if(subghz->txrx->txrx_state == SubGhzTxRxStateTx) {
-        subghz_tx_stop(subghz);
-        subghz_sleep(subghz);
+    SubGhzRpcState state = scene_manager_get_scene_state(subghz->scene_manager, SubGhzSceneRpc);
+    if(state == SubGhzRpcStateTx) {
+        subghz_txrx_stop(subghz->txrx);
         subghz_blink_stop(subghz);
     }
 

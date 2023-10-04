@@ -134,7 +134,7 @@ static size_t file_stream_size(FileStream* stream) {
 }
 
 static size_t file_stream_write(FileStream* stream, const uint8_t* data, size_t size) {
-    // TODO cache
+    // TODO FL-3545: cache
     size_t need_to_write = size;
     while(need_to_write > 0) {
         uint16_t was_written =
@@ -148,7 +148,7 @@ static size_t file_stream_write(FileStream* stream, const uint8_t* data, size_t 
 }
 
 static size_t file_stream_read(FileStream* stream, uint8_t* data, size_t size) {
-    // TODO cache
+    // TODO FL-3545: cache
     size_t need_to_read = size;
     while(need_to_read > 0) {
         uint16_t was_read =
@@ -172,18 +172,21 @@ static bool file_stream_delete_and_insert(
     // open scratchpad
     Stream* scratch_stream = file_stream_alloc(_stream->storage);
 
-    // TODO: we need something like "storage_open_tmpfile and storage_close_tmpfile"
-    string_t scratch_name;
-    string_t tmp_name;
-    string_init(tmp_name);
+    // TODO FL-3546: we need something like "storage_open_tmpfile and storage_close_tmpfile"
+    FuriString* scratch_name;
+    FuriString* tmp_name;
+    tmp_name = furi_string_alloc();
     storage_get_next_filename(
         _stream->storage, STORAGE_ANY_PATH_PREFIX, ".scratch", ".pad", tmp_name, 255);
-    string_init_printf(scratch_name, ANY_PATH("%s.pad"), string_get_cstr(tmp_name));
-    string_clear(tmp_name);
+    scratch_name = furi_string_alloc_printf(ANY_PATH("%s.pad"), furi_string_get_cstr(tmp_name));
+    furi_string_free(tmp_name);
 
     do {
         if(!file_stream_open(
-               scratch_stream, string_get_cstr(scratch_name), FSAM_READ_WRITE, FSOM_CREATE_NEW))
+               scratch_stream,
+               furi_string_get_cstr(scratch_name),
+               FSAM_READ_WRITE,
+               FSOM_CREATE_NEW))
             break;
 
         size_t current_position = stream_tell(stream);
@@ -225,8 +228,8 @@ static bool file_stream_delete_and_insert(
     } while(false);
 
     stream_free(scratch_stream);
-    storage_common_remove(_stream->storage, string_get_cstr(scratch_name));
-    string_clear(scratch_name);
+    storage_common_remove(_stream->storage, furi_string_get_cstr(scratch_name));
+    furi_string_free(scratch_name);
 
     return result;
 }

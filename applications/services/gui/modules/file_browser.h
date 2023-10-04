@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "m-string.h"
 #include <gui/view.h>
 
 #ifdef __cplusplus
@@ -15,10 +14,13 @@ extern "C" {
 typedef struct FileBrowser FileBrowser;
 typedef void (*FileBrowserCallback)(void* context);
 
-typedef bool (
-    *FileBrowserLoadItemCallback)(string_t path, void* context, uint8_t** icon, string_t item_name);
+typedef bool (*FileBrowserLoadItemCallback)(
+    FuriString* path,
+    void* context,
+    uint8_t** icon,
+    FuriString* item_name);
 
-FileBrowser* file_browser_alloc(string_ptr result_path);
+FileBrowser* file_browser_alloc(FuriString* result_path);
 
 void file_browser_free(FileBrowser* browser);
 
@@ -27,11 +29,13 @@ View* file_browser_get_view(FileBrowser* browser);
 void file_browser_configure(
     FileBrowser* browser,
     const char* extension,
+    const char* base_path,
     bool skip_assets,
+    bool hide_dot_files,
     const Icon* file_icon,
     bool hide_ext);
 
-void file_browser_start(FileBrowser* browser, string_t path);
+void file_browser_start(FileBrowser* browser, FuriString* path);
 
 void file_browser_stop(FileBrowser* browser);
 

@@ -1,5 +1,4 @@
 #include "../lfrfid_i.h"
-#include <dolphin/dolphin.h>
 
 void lfrfid_scene_save_data_on_enter(void* context) {
     LfRfid* app = context;
@@ -9,13 +8,10 @@ void lfrfid_scene_save_data_on_enter(void* context) {
 
     bool need_restore = scene_manager_get_scene_state(app->scene_manager, LfRfidSceneSaveData);
 
-    if(need_restore) {
-        protocol_dict_set_data(app->dict, app->protocol_id, app->old_key_data, size);
-    } else {
+    if(!need_restore) {
         protocol_dict_get_data(app->dict, app->protocol_id, app->old_key_data, size);
+        protocol_dict_get_data(app->dict, app->protocol_id, app->new_key_data, size);
     }
-
-    protocol_dict_get_data(app->dict, app->protocol_id, app->new_key_data, size);
 
     byte_input_set_header_text(byte_input, "Enter the data in hex");
 
@@ -35,12 +31,13 @@ bool lfrfid_scene_save_data_on_event(void* context, SceneManagerEvent event) {
             consumed = true;
             size_t size = protocol_dict_get_data_size(app->dict, app->protocol_id);
             protocol_dict_set_data(app->dict, app->protocol_id, app->new_key_data, size);
-            DOLPHIN_DEED(DolphinDeedRfidAdd);
             scene_manager_next_scene(scene_manager, LfRfidSceneSaveName);
             scene_manager_set_scene_state(scene_manager, LfRfidSceneSaveData, 1);
         }
     } else if(event.type == SceneManagerEventTypeBack) {
         scene_manager_set_scene_state(scene_manager, LfRfidSceneSaveData, 0);
+        size_t size = protocol_dict_get_data_size(app->dict, app->protocol_id);
+        protocol_dict_set_data(app->dict, app->protocol_id, app->old_key_data, size);
     }
 
     return consumed;

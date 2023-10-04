@@ -1,10 +1,9 @@
 #include "nfc_supported_card.h"
-#include "plantain_parser.h" // For luhn and string_push_uint64
 
 #include <gui/modules/widget.h>
 #include <nfc_worker_i.h>
 
-#include "furi_hal.h"
+#include <furi_hal.h>
 
 static const MfClassicAuthContext plantain_keys_4k[] = {
     {.sector = 0, .key_a = 0xFFFFFFFFFFFF, .key_b = 0xFFFFFFFFFFFF},
@@ -107,7 +106,7 @@ bool plantain_4k_parser_parse(NfcDeviceData* dev_data) {
     // Point to block 0 of sector 0, value 0
     temp_ptr = &data->block[0 * 4].value[0];
     // Read first 7 bytes of block 0 of sector 0 from last to first and convert them to uint64_t
-    // 80 5C 23 8A 16 31 04 becomes 04 31 16 8A 23 5C 80, and equals to 36130104729284868 decimal
+    // 04 31 16 8A 23 5C 80 becomes 80 5C 23 8A 16 31 04, and equals to 36130104729284868 decimal
     uint8_t card_number_arr[7];
     for(size_t i = 0; i < 7; i++) {
         card_number_arr[i] = temp_ptr[6 - i];
@@ -117,37 +116,9 @@ bool plantain_4k_parser_parse(NfcDeviceData* dev_data) {
     for(size_t i = 0; i < 7; i++) {
         card_number = (card_number << 8) | card_number_arr[i];
     }
-    // Convert card number to string
-    string_t card_number_str;
-    string_init(card_number_str);
-    // Should look like "361301047292848684"
-    // %llu doesn't work for some reason in sprintf, so we use string_push_uint64 instead
-    string_push_uint64(card_number, card_number_str);
-    // Add suffix with luhn checksum (1 digit) to the card number string
-    string_t card_number_suffix;
-    string_init(card_number_suffix);
 
-    // The number to calculate the checksum on doesn't fit into uint64_t, idk
-    //uint8_t luhn_checksum = plantain_calculate_luhn(card_number);
-
-    // // Convert luhn checksum to string
-    // string_t luhn_checksum_str;
-    // string_init(luhn_checksum_str);
-    // string_push_uint64(luhn_checksum, luhn_checksum_str);
-
-    string_cat_printf(card_number_suffix, "-");
-    // FURI_LOG_D("plant4k", "Card checksum: %d", luhn_checksum);
-    string_cat_printf(card_number_str, string_get_cstr(card_number_suffix));
-    // Free all not needed strings
-    string_clear(card_number_suffix);
-    // string_clear(luhn_checksum_str);
-
-    string_printf(
-        dev_data->parsed_data,
-        "\e#Plantain\nN:%s\nBalance:%d\n",
-        string_get_cstr(card_number_str),
-        balance);
-    string_clear(card_number_str);
+    furi_string_printf(
+        dev_data->parsed_data, "\e#Plantain\nN:%llu-\nBalance:%lu\n", card_number, balance);
 
     return true;
 }

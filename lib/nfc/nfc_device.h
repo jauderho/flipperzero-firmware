@@ -11,13 +11,18 @@
 #include <lib/nfc/protocols/mifare_ultralight.h>
 #include <lib/nfc/protocols/mifare_classic.h>
 #include <lib/nfc/protocols/mifare_desfire.h>
+#include <lib/nfc/protocols/nfcv.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define NFC_DEV_NAME_MAX_LEN 22
 #define NFC_READER_DATA_MAX_SIZE 64
-#define NFC_DICT_KEY_BATCH_SIZE 50
+#define NFC_DICT_KEY_BATCH_SIZE 10
 
-#define NFC_APP_FOLDER ANY_PATH("nfc")
-#define NFC_APP_EXTENSION ".nfc"
+#define NFC_APP_FILENAME_PREFIX "NFC"
+#define NFC_APP_FILENAME_EXTENSION ".nfc"
 #define NFC_APP_SHADOW_EXTENSION ".shd"
 
 typedef void (*NfcLoadingCallback)(void* context, bool state);
@@ -28,6 +33,7 @@ typedef enum {
     NfcDeviceProtocolMifareUl,
     NfcDeviceProtocolMifareClassic,
     NfcDeviceProtocolMifareDesfire,
+    NfcDeviceProtocolNfcV
 } NfcProtocol;
 
 typedef enum {
@@ -36,6 +42,7 @@ typedef enum {
     NfcDeviceSaveFormatMifareUl,
     NfcDeviceSaveFormatMifareClassic,
     NfcDeviceSaveFormatMifareDesfire,
+    NfcDeviceSaveFormatNfcV,
 } NfcDeviceSaveFormat;
 
 typedef struct {
@@ -45,22 +52,34 @@ typedef struct {
 
 typedef struct {
     MfClassicDict* dict;
+    uint8_t current_sector;
 } NfcMfClassicDictAttackData;
+
+typedef enum {
+    NfcReadModeAuto,
+    NfcReadModeMfClassic,
+    NfcReadModeMfUltralight,
+    NfcReadModeMfDesfire,
+    NfcReadModeNFCA,
+} NfcReadMode;
 
 typedef struct {
     FuriHalNfcDevData nfc_data;
     NfcProtocol protocol;
+    NfcReadMode read_mode;
     union {
         NfcReaderRequestData reader_data;
         NfcMfClassicDictAttackData mf_classic_dict_attack_data;
+        MfUltralightAuth mf_ul_auth;
     };
     union {
         EmvData emv_data;
         MfUltralightData mf_ul_data;
         MfClassicData mf_classic_data;
         MifareDesfireData mf_df_data;
+        NfcVData nfcv_data;
     };
-    string_t parsed_data;
+    FuriString* parsed_data;
 } NfcDeviceData;
 
 typedef struct {
@@ -68,7 +87,8 @@ typedef struct {
     DialogsApp* dialogs;
     NfcDeviceData dev_data;
     char dev_name[NFC_DEV_NAME_MAX_LEN + 1];
-    string_t load_path;
+    FuriString* load_path;
+    FuriString* folder;
     NfcDeviceSaveFormat format;
     bool shadow_file_exist;
 
@@ -101,3 +121,7 @@ bool nfc_device_delete(NfcDevice* dev, bool use_load_path);
 bool nfc_device_restore(NfcDevice* dev, bool use_load_path);
 
 void nfc_device_set_loading_callback(NfcDevice* dev, NfcLoadingCallback callback, void* context);
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,4 +1,5 @@
 #include "lfrfid_i.h"
+#include <dolphin/dolphin.h>
 
 static bool lfrfid_debug_custom_event_callback(void* context, uint32_t event) {
     furi_assert(context);
@@ -36,9 +37,9 @@ static LfRfid* lfrfid_alloc() {
     lfrfid->storage = furi_record_open(RECORD_STORAGE);
     lfrfid->dialogs = furi_record_open(RECORD_DIALOGS);
 
-    string_init(lfrfid->file_name);
-    string_init(lfrfid->raw_file_name);
-    string_init_set_str(lfrfid->file_path, LFRFID_APP_FOLDER);
+    lfrfid->file_name = furi_string_alloc();
+    lfrfid->raw_file_name = furi_string_alloc();
+    lfrfid->file_path = furi_string_alloc_set(LFRFID_APP_FOLDER);
 
     lfrfid->dict = protocol_dict_alloc(lfrfid_protocols, LFRFIDProtocolMax);
 
@@ -99,14 +100,14 @@ static LfRfid* lfrfid_alloc() {
         lfrfid->view_dispatcher, LfRfidViewRead, lfrfid_view_read_get_view(lfrfid->read_view));
 
     return lfrfid;
-}
+} //-V773
 
 static void lfrfid_free(LfRfid* lfrfid) {
     furi_assert(lfrfid);
 
-    string_clear(lfrfid->raw_file_name);
-    string_clear(lfrfid->file_name);
-    string_clear(lfrfid->file_path);
+    furi_string_free(lfrfid->raw_file_name);
+    furi_string_free(lfrfid->file_name);
+    furi_string_free(lfrfid->file_path);
     protocol_dict_free(lfrfid->dict);
 
     lfrfid_worker_free(lfrfid->lfworker);
@@ -182,14 +183,18 @@ int32_t lfrfid_app(void* p) {
             view_dispatcher_attach_to_gui(
                 app->view_dispatcher, app->gui, ViewDispatcherTypeDesktop);
             scene_manager_next_scene(app->scene_manager, LfRfidSceneRpc);
+            dolphin_deed(DolphinDeedRfidEmulate);
         } else {
-            string_set_str(app->file_path, args);
-            lfrfid_load_key_data(app, app->file_path, true);
-            view_dispatcher_attach_to_gui(
-                app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
-            scene_manager_next_scene(app->scene_manager, LfRfidSceneEmulate);
+            furi_string_set(app->file_path, args);
+            if(lfrfid_load_key_data(app, app->file_path, true)) {
+                view_dispatcher_attach_to_gui(
+                    app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
+                scene_manager_next_scene(app->scene_manager, LfRfidSceneEmulate);
+                dolphin_deed(DolphinDeedRfidEmulate);
+            } else {
+                view_dispatcher_stop(app->view_dispatcher);
+            }
         }
-
     } else {
         view_dispatcher_attach_to_gui(
             app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
@@ -210,13 +215,16 @@ bool lfrfid_save_key(LfRfid* app) {
 
     lfrfid_make_app_folder(app);
 
-    if(string_end_with_str_p(app->file_path, LFRFID_APP_EXTENSION)) {
-        size_t filename_start = string_search_rchar(app->file_path, '/');
-        string_left(app->file_path, filename_start);
+    if(furi_string_end_with(app->file_path, LFRFID_APP_FILENAME_EXTENSION)) {
+        size_t filename_start = furi_string_search_rchar(app->file_path, '/');
+        furi_string_left(app->file_path, filename_start);
     }
 
-    string_cat_printf(
-        app->file_path, "/%s%s", string_get_cstr(app->file_name), LFRFID_APP_EXTENSION);
+    furi_string_cat_printf(
+        app->file_path,
+        "/%s%s",
+        furi_string_get_cstr(app->file_name),
+        LFRFID_APP_FILENAME_EXTENSION);
 
     result = lfrfid_save_key_data(app, app->file_path);
     return result;
@@ -226,7 +234,9 @@ bool lfrfid_load_key_from_file_select(LfRfid* app) {
     furi_assert(app);
 
     DialogsFileBrowserOptions browser_options;
-    dialog_file_browser_set_basic_options(&browser_options, LFRFID_APP_EXTENSION, &I_125_10px);
+    dialog_file_browser_set_basic_options(
+        &browser_options, LFRFID_APP_FILENAME_EXTENSION, &I_125_10px);
+    browser_options.base_path = LFRFID_APP_FOLDER;
 
     // Input events and views are managed by file_browser
     bool result =
@@ -242,14 +252,14 @@ bool lfrfid_load_key_from_file_select(LfRfid* app) {
 bool lfrfid_delete_key(LfRfid* app) {
     furi_assert(app);
 
-    return storage_simply_remove(app->storage, string_get_cstr(app->file_path));
+    return storage_simply_remove(app->storage, furi_string_get_cstr(app->file_path));
 }
 
-bool lfrfid_load_key_data(LfRfid* app, string_t path, bool show_dialog) {
+bool lfrfid_load_key_data(LfRfid* app, FuriString* path, bool show_dialog) {
     bool result = false;
 
     do {
-        app->protocol_id = lfrfid_dict_file_load(app->dict, string_get_cstr(path));
+        app->protocol_id = lfrfid_dict_file_load(app->dict, furi_string_get_cstr(path));
         if(app->protocol_id == PROTOCOL_NO) break;
 
         path_extract_filename(path, app->file_name, true);
@@ -263,8 +273,8 @@ bool lfrfid_load_key_data(LfRfid* app, string_t path, bool show_dialog) {
     return result;
 }
 
-bool lfrfid_save_key_data(LfRfid* app, string_t path) {
-    bool result = lfrfid_dict_file_save(app->dict, app->protocol_id, string_get_cstr(path));
+bool lfrfid_save_key_data(LfRfid* app, FuriString* path) {
+    bool result = lfrfid_dict_file_save(app->dict, app->protocol_id, furi_string_get_cstr(path));
 
     if(!result) {
         dialog_message_show_storage_error(app->dialogs, "Cannot save\nkey file");

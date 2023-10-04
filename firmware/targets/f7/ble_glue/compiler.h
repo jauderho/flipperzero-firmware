@@ -1,22 +1,12 @@
-/*****************************************************************************
- * @file    compiler.h
- * @author  MDG
- * @brief   This file contains the definitions which are compiler dependent.
- *****************************************************************************
- * @attention
- *
- * Copyright (c) 2018-2022 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
- *****************************************************************************
- */
+#pragma once
 
-#ifndef COMPILER_H__
-#define COMPILER_H__
+#ifndef __PACKED_STRUCT
+#define __PACKED_STRUCT PACKED(struct)
+#endif
+
+#ifndef __PACKED_UNION
+#define __PACKED_UNION PACKED(union)
+#endif
 
 /**
   * @brief  This is the section dedicated to IAR toolchain
@@ -146,5 +136,3 @@
 #endif
 #endif
 #endif
-
-#endif /* COMPILER_H__ */

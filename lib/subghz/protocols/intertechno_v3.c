@@ -158,34 +158,36 @@ static bool subghz_protocol_encoder_intertechno_v3_get_upload(
     return true;
 }
 
-bool subghz_protocol_encoder_intertechno_v3_deserialize(
+SubGhzProtocolStatus subghz_protocol_encoder_intertechno_v3_deserialize(
     void* context,
     FlipperFormat* flipper_format) {
     furi_assert(context);
     SubGhzProtocolEncoderIntertechno_V3* instance = context;
-    bool res = false;
+    SubGhzProtocolStatus ret = SubGhzProtocolStatusError;
     do {
-        if(!subghz_block_generic_deserialize(&instance->generic, flipper_format)) {
-            FURI_LOG_E(TAG, "Deserialize error");
+        ret = subghz_block_generic_deserialize(&instance->generic, flipper_format);
+        if(ret != SubGhzProtocolStatusOk) {
             break;
         }
         if((instance->generic.data_count_bit !=
             subghz_protocol_intertechno_v3_const.min_count_bit_for_found) &&
            (instance->generic.data_count_bit != INTERTECHNO_V3_DIMMING_COUNT_BIT)) {
             FURI_LOG_E(TAG, "Wrong number of bits in key");
+            ret = SubGhzProtocolStatusErrorValueBitCount;
             break;
         }
         //optional parameter parameter
         flipper_format_read_uint32(
             flipper_format, "Repeat", (uint32_t*)&instance->encoder.repeat, 1);
 
-        if(!subghz_protocol_encoder_intertechno_v3_get_upload(instance)) break;
+        if(!subghz_protocol_encoder_intertechno_v3_get_upload(instance)) {
+            ret = SubGhzProtocolStatusErrorEncoderGetUpload;
+            break;
+        }
         instance->encoder.is_running = true;
-
-        res = true;
     } while(false);
 
-    return res;
+    return ret;
 }
 
 void subghz_protocol_encoder_intertechno_v3_stop(void* context) {
@@ -404,43 +406,44 @@ uint8_t subghz_protocol_decoder_intertechno_v3_get_hash_data(void* context) {
         &instance->decoder, (instance->decoder.decode_count_bit / 8) + 1);
 }
 
-bool subghz_protocol_decoder_intertechno_v3_serialize(
+SubGhzProtocolStatus subghz_protocol_decoder_intertechno_v3_serialize(
     void* context,
     FlipperFormat* flipper_format,
-    SubGhzPresetDefinition* preset) {
+    SubGhzRadioPreset* preset) {
     furi_assert(context);
     SubGhzProtocolDecoderIntertechno_V3* instance = context;
     return subghz_block_generic_serialize(&instance->generic, flipper_format, preset);
 }
 
-bool subghz_protocol_decoder_intertechno_v3_deserialize(
+SubGhzProtocolStatus subghz_protocol_decoder_intertechno_v3_deserialize(
     void* context,
     FlipperFormat* flipper_format) {
     furi_assert(context);
     SubGhzProtocolDecoderIntertechno_V3* instance = context;
-    bool ret = false;
+    SubGhzProtocolStatus ret = SubGhzProtocolStatusError;
     do {
-        if(!subghz_block_generic_deserialize(&instance->generic, flipper_format)) {
+        ret = subghz_block_generic_deserialize(&instance->generic, flipper_format);
+        if(ret != SubGhzProtocolStatusOk) {
             break;
         }
         if((instance->generic.data_count_bit !=
             subghz_protocol_intertechno_v3_const.min_count_bit_for_found) &&
            (instance->generic.data_count_bit != INTERTECHNO_V3_DIMMING_COUNT_BIT)) {
             FURI_LOG_E(TAG, "Wrong number of bits in key");
+            ret = SubGhzProtocolStatusErrorValueBitCount;
             break;
         }
-        ret = true;
     } while(false);
     return ret;
 }
 
-void subghz_protocol_decoder_intertechno_v3_get_string(void* context, string_t output) {
+void subghz_protocol_decoder_intertechno_v3_get_string(void* context, FuriString* output) {
     furi_assert(context);
     SubGhzProtocolDecoderIntertechno_V3* instance = context;
 
     subghz_protocol_intertechno_v3_check_remote_controller(&instance->generic);
 
-    string_cat_printf(
+    furi_string_cat_printf(
         output,
         "%.11s %db\r\n"
         "Key:0x%08llX\r\n"
@@ -453,17 +456,17 @@ void subghz_protocol_decoder_intertechno_v3_get_string(void* context, string_t o
     if(instance->generic.data_count_bit ==
        subghz_protocol_intertechno_v3_const.min_count_bit_for_found) {
         if(instance->generic.cnt >> 5) {
-            string_cat_printf(
+            furi_string_cat_printf(
                 output, "Ch: All Btn:%s\r\n", (instance->generic.btn ? "On" : "Off"));
         } else {
-            string_cat_printf(
+            furi_string_cat_printf(
                 output,
                 "Ch:" CH_PATTERN " Btn:%s\r\n",
                 CNT_TO_CH(instance->generic.cnt),
                 (instance->generic.btn ? "On" : "Off"));
         }
     } else if(instance->generic.data_count_bit == INTERTECHNO_V3_DIMMING_COUNT_BIT) {
-        string_cat_printf(
+        furi_string_cat_printf(
             output,
             "Ch:" CH_PATTERN " Dimm:%d%%\r\n",
             CNT_TO_CH(instance->generic.cnt),

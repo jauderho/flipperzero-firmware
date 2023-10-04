@@ -1,17 +1,17 @@
 #include "elements.h"
-#include "m-core.h"
+#include <m-core.h>
 #include <assets_icons.h>
-#include "furi_hal_resources.h"
+#include <furi_hal_resources.h>
 #include <furi_hal.h>
-#include "gui/canvas.h"
 
+#include <gui/canvas.h>
 #include <gui/icon_i.h>
 #include <gui/icon_animation_i.h>
 
-#include <m-string.h>
 #include <furi.h>
 #include "canvas_i.h"
 
+#include <math.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -40,6 +40,31 @@ void elements_progress_bar(Canvas* canvas, uint8_t x, uint8_t y, uint8_t width, 
     canvas_draw_rframe(canvas, x, y, width, height, 3);
 
     canvas_draw_box(canvas, x + 1, y + 1, progress_length, height - 2);
+}
+
+void elements_progress_bar_with_text(
+    Canvas* canvas,
+    uint8_t x,
+    uint8_t y,
+    uint8_t width,
+    float progress,
+    const char* text) {
+    furi_assert(canvas);
+    furi_assert((progress >= 0.0f) && (progress <= 1.0f));
+    uint8_t height = 11;
+
+    uint8_t progress_length = roundf(progress * (width - 2));
+
+    canvas_set_color(canvas, ColorWhite);
+    canvas_draw_box(canvas, x + 1, y + 1, width - 2, height - 2);
+    canvas_set_color(canvas, ColorBlack);
+    canvas_draw_rframe(canvas, x, y, width, height, 3);
+
+    canvas_draw_box(canvas, x + 1, y + 1, progress_length, height - 2);
+
+    canvas_set_color(canvas, ColorXOR);
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_str_aligned(canvas, x + width / 2, y + 2, AlignCenter, AlignTop, text);
 }
 
 void elements_scrollbar_pos(
@@ -189,12 +214,12 @@ static size_t
         end = text + strlen(text);
     }
     size_t text_size = end - text;
-    string_t str;
-    string_init_set_str(str, text);
-    string_left(str, text_size);
+    FuriString* str;
+    str = furi_string_alloc_set(text);
+    furi_string_left(str, text_size);
     size_t result = 0;
 
-    uint16_t len_px = canvas_string_width(canvas, string_get_cstr(str));
+    uint16_t len_px = canvas_string_width(canvas, furi_string_get_cstr(str));
     uint8_t px_left = 0;
     if(horizontal == AlignCenter) {
         if(x > (canvas_width(canvas) / 2)) {
@@ -211,11 +236,11 @@ static size_t
     }
 
     if(len_px > px_left) {
-        uint8_t excess_symbols_approximately =
-            roundf((float)(len_px - px_left) / ((float)len_px / (float)text_size));
+        size_t excess_symbols_approximately =
+            ceilf((float)(len_px - px_left) / ((float)len_px / (float)text_size));
         // reduce to 5 to be sure dash fit, and next line will be at least 5 symbols long
         if(excess_symbols_approximately > 0) {
-            excess_symbols_approximately = MAX(excess_symbols_approximately, 5);
+            excess_symbols_approximately = MAX(excess_symbols_approximately, 5u);
             result = text_size - excess_symbols_approximately - 1;
         } else {
             result = text_size;
@@ -224,7 +249,7 @@ static size_t
         result = text_size;
     }
 
-    string_clear(str);
+    furi_string_free(str);
     return result;
 }
 
@@ -240,7 +265,7 @@ void elements_multiline_text_aligned(
 
     uint8_t lines_count = 0;
     uint8_t font_height = canvas_current_font_height(canvas);
-    string_t line;
+    FuriString* line;
 
     /* go through text line by line and count lines */
     for(const char* start = text; start[0];) {
@@ -261,14 +286,15 @@ void elements_multiline_text_aligned(
         size_t chars_fit = elements_get_max_chars_to_fit(canvas, horizontal, start, x);
 
         if((start[chars_fit] == '\n') || (start[chars_fit] == 0)) {
-            string_init_printf(line, "%.*s", chars_fit, start);
+            line = furi_string_alloc_printf("%.*s", chars_fit, start);
         } else if((y + font_height) > canvas_height(canvas)) {
-            string_init_printf(line, "%.*s...\n", chars_fit, start);
+            line = furi_string_alloc_printf("%.*s...\n", chars_fit, start);
         } else {
-            string_init_printf(line, "%.*s-\n", chars_fit, start);
+            chars_fit -= 1; // account for the dash
+            line = furi_string_alloc_printf("%.*s-\n", chars_fit, start);
         }
-        canvas_draw_str_aligned(canvas, x, y, horizontal, vertical, string_get_cstr(line));
-        string_clear(line);
+        canvas_draw_str_aligned(canvas, x, y, horizontal, vertical, furi_string_get_cstr(line));
+        furi_string_free(line);
         y += font_height;
         if(y > canvas_height(canvas)) {
             break;
@@ -284,22 +310,22 @@ void elements_multiline_text(Canvas* canvas, uint8_t x, uint8_t y, const char* t
     furi_assert(text);
 
     uint8_t font_height = canvas_current_font_height(canvas);
-    string_t str;
-    string_init(str);
+    FuriString* str;
+    str = furi_string_alloc();
     const char* start = text;
     char* end;
     do {
         end = strchr(start, '\n');
         if(end) {
-            string_set_strn(str, start, end - start);
+            furi_string_set_strn(str, start, end - start);
+            start = end + 1;
         } else {
-            string_set_str(str, start);
+            furi_string_set(str, start);
         }
-        canvas_draw_str(canvas, x, y, string_get_cstr(str));
-        start = end + 1;
+        canvas_draw_str(canvas, x, y, furi_string_get_cstr(str));
         y += font_height;
     } while(end && y < 64);
-    string_clear(str);
+    furi_string_free(str);
 }
 
 void elements_multiline_text_framed(Canvas* canvas, uint8_t x, uint8_t y, const char* text) {
@@ -533,19 +559,66 @@ void elements_bubble_str(
     canvas_draw_line(canvas, x2, y2, x3, y3);
 }
 
-void elements_string_fit_width(Canvas* canvas, string_t string, uint8_t width) {
+void elements_string_fit_width(Canvas* canvas, FuriString* string, uint8_t width) {
     furi_assert(canvas);
     furi_assert(string);
 
-    uint16_t len_px = canvas_string_width(canvas, string_get_cstr(string));
+    uint16_t len_px = canvas_string_width(canvas, furi_string_get_cstr(string));
     if(len_px > width) {
         width -= canvas_string_width(canvas, "...");
         do {
-            string_left(string, string_size(string) - 1);
-            len_px = canvas_string_width(canvas, string_get_cstr(string));
+            furi_string_left(string, furi_string_size(string) - 1);
+            len_px = canvas_string_width(canvas, furi_string_get_cstr(string));
         } while(len_px > width);
-        string_cat(string, "...");
+        furi_string_cat(string, "...");
     }
+}
+
+void elements_scrollable_text_line(
+    Canvas* canvas,
+    uint8_t x,
+    uint8_t y,
+    uint8_t width,
+    FuriString* string,
+    size_t scroll,
+    bool ellipsis) {
+    FuriString* line = furi_string_alloc_set(string);
+
+    size_t len_px = canvas_string_width(canvas, furi_string_get_cstr(line));
+    if(len_px > width) {
+        if(ellipsis) {
+            width -= canvas_string_width(canvas, "...");
+        }
+
+        // Calculate scroll size
+        size_t scroll_size = furi_string_size(line);
+        size_t right_width = 0;
+        for(size_t i = scroll_size; i > 0; i--) {
+            right_width += canvas_glyph_width(canvas, furi_string_get_char(line, i));
+            if(right_width > width) break;
+            scroll_size--;
+            if(!scroll_size) break;
+        }
+        // Ensure that we have something to scroll
+        if(scroll_size) {
+            scroll_size += 3;
+            scroll = scroll % scroll_size;
+            furi_string_right(line, scroll);
+        }
+
+        len_px = canvas_string_width(canvas, furi_string_get_cstr(line));
+        while(len_px > width) {
+            furi_string_left(line, furi_string_size(line) - 1);
+            len_px = canvas_string_width(canvas, furi_string_get_cstr(line));
+        }
+
+        if(ellipsis) {
+            furi_string_cat(line, "...");
+        }
+    }
+
+    canvas_draw_str(canvas, x, y, furi_string_get_cstr(line));
+    furi_string_free(line);
 }
 
 void elements_text_box(
@@ -567,7 +640,7 @@ void elements_text_box(
     bool inversed_present = false;
     Font current_font = FontSecondary;
     Font prev_font = FontSecondary;
-    CanvasFontParameters* font_params = canvas_get_font_params(canvas, current_font);
+    const CanvasFontParameters* font_params = canvas_get_font_params(canvas, current_font);
 
     // Fill line parameters
     uint8_t line_leading_min = font_params->leading_min;

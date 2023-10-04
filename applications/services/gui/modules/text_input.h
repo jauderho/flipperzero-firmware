@@ -1,13 +1,12 @@
 /**
  * @file text_input.h
- * GUI: TextInput keybord view module API
+ * GUI: TextInput keyboard view module API
  */
 
 #pragma once
 
 #include <gui/view.h>
 #include "validators.h"
-#include <m-string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,7 +15,7 @@ extern "C" {
 /** Text input anonymous structure */
 typedef struct TextInput TextInput;
 typedef void (*TextInputCallback)(void* context);
-typedef bool (*TextInputValidatorCallback)(const char* text, string_t error, void* context);
+typedef bool (*TextInputValidatorCallback)(const char* text, FuriString* error, void* context);
 
 /** Allocate and initialize text input 
  * 

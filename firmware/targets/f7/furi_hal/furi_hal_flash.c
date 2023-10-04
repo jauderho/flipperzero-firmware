@@ -1,29 +1,44 @@
 #include <furi_hal_flash.h>
 #include <furi_hal_bt.h>
+#include <furi_hal_power.h>
+#include <furi_hal_cortex.h>
 #include <furi.h>
 #include <ble/ble.h>
 #include <interface/patterns/ble_thread/shci/shci.h>
 
 #include <stm32wbxx.h>
+#include <stm32wbxx_ll_hsem.h>
+
+#include <hsem_map.h>
 
 #define TAG "FuriHalFlash"
 
 #define FURI_HAL_CRITICAL_MSG "Critical flash operation fail"
-#define FURI_HAL_FLASH_READ_BLOCK 8
-#define FURI_HAL_FLASH_WRITE_BLOCK 8
-#define FURI_HAL_FLASH_PAGE_SIZE 4096
-#define FURI_HAL_FLASH_CYCLES_COUNT 10000
-#define FURI_HAL_FLASH_TIMEOUT 1000
-#define FURI_HAL_FLASH_KEY1 0x45670123U
-#define FURI_HAL_FLASH_KEY2 0xCDEF89ABU
-#define FURI_HAL_FLASH_TOTAL_PAGES 256
+#define FURI_HAL_FLASH_READ_BLOCK (8U)
+#define FURI_HAL_FLASH_WRITE_BLOCK (8U)
+#define FURI_HAL_FLASH_PAGE_SIZE (4096U)
+#define FURI_HAL_FLASH_CYCLES_COUNT (10000U)
+#define FURI_HAL_FLASH_TIMEOUT (1000U)
+#define FURI_HAL_FLASH_KEY1 (0x45670123U)
+#define FURI_HAL_FLASH_KEY2 (0xCDEF89ABU)
+#define FURI_HAL_FLASH_TOTAL_PAGES (256U)
 #define FURI_HAL_FLASH_SR_ERRORS                                                               \
     (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | FLASH_SR_PGAERR | FLASH_SR_SIZERR | \
      FLASH_SR_PGSERR | FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR | FLASH_SR_OPTVERR)
 
-#define FURI_HAL_FLASH_OPT_KEY1 0x08192A3B
-#define FURI_HAL_FLASH_OPT_KEY2 0x4C5D6E7F
+#define FURI_HAL_FLASH_OPT_KEY1 (0x08192A3BU)
+#define FURI_HAL_FLASH_OPT_KEY2 (0x4C5D6E7FU)
 #define FURI_HAL_FLASH_OB_TOTAL_WORDS (0x80 / (sizeof(uint32_t) * 2))
+
+/* STM32CubeWB/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_RfWithFlash/Core/Src/flash_driver.c
+ * ProcessSingleFlashOperation, quote:
+  > In most BLE application, the flash should not be blocked by the CPU2 longer than FLASH_TIMEOUT_VALUE (1000ms)
+  > However, it could be that for some marginal application, this time is longer.
+  > ... there is no other way than waiting the operation to be completed.
+  > If for any reason this test is never passed, this means there is a failure in the system and there is no other
+  > way to recover than applying a device reset. 
+ */
+#define FURI_HAL_FLASH_C2_LOCK_TIMEOUT_MS (3000U) /* 3 seconds */
 
 #define IS_ADDR_ALIGNED_64BITS(__VALUE__) (((__VALUE__)&0x7U) == (0x00UL))
 #define IS_FLASH_PROGRAM_ADDRESS(__VALUE__)                                             \
@@ -83,7 +98,7 @@ void furi_hal_flash_init() {
     // WRITE_REG(FLASH->SR, FLASH_SR_OPTVERR);
     /* Actually, reset all error flags on start */
     if(READ_BIT(FLASH->SR, FURI_HAL_FLASH_SR_ERRORS)) {
-        FURI_LOG_E(TAG, "FLASH->SR 0x%08X", FLASH->SR);
+        FURI_LOG_E(TAG, "FLASH->SR 0x%08lX", FLASH->SR);
         WRITE_REG(FLASH->SR, FURI_HAL_FLASH_SR_ERRORS);
     }
 }
@@ -114,6 +129,7 @@ static void furi_hal_flash_lock(void) {
 }
 
 static void furi_hal_flash_begin_with_core2(bool erase_flag) {
+    furi_hal_power_insomnia_enter();
     /* Take flash controller ownership */
     while(LL_HSEM_1StepLock(HSEM, CFG_HW_FLASH_SEMID) != 0) {
         furi_thread_yield();
@@ -129,9 +145,11 @@ static void furi_hal_flash_begin_with_core2(bool erase_flag) {
     for(volatile uint32_t i = 0; i < 35; i++)
         ;
 
+    FuriHalCortexTimer timer = furi_hal_cortex_timer_get(FURI_HAL_FLASH_C2_LOCK_TIMEOUT_MS * 1000);
     while(true) {
         /* Wait till flash controller become usable */
         while(LL_FLASH_IsActiveFlag_OperationSuspended()) {
+            furi_check(!furi_hal_cortex_timer_is_expired(timer));
             furi_thread_yield();
         };
 
@@ -141,6 +159,7 @@ static void furi_hal_flash_begin_with_core2(bool erase_flag) {
         /* Actually we already have mutex for it, but specification is specification  */
         if(LL_HSEM_IsSemaphoreLocked(HSEM, CFG_HW_BLOCK_FLASH_REQ_BY_CPU1_SEMID)) {
             taskEXIT_CRITICAL();
+            furi_check(!furi_hal_cortex_timer_is_expired(timer));
             furi_thread_yield();
             continue;
         }
@@ -148,6 +167,7 @@ static void furi_hal_flash_begin_with_core2(bool erase_flag) {
         /* Take sempahopre and prevent core2 from anything funky */
         if(LL_HSEM_1StepLock(HSEM, CFG_HW_BLOCK_FLASH_REQ_BY_CPU2_SEMID) != 0) {
             taskEXIT_CRITICAL();
+            furi_check(!furi_hal_cortex_timer_is_expired(timer));
             furi_thread_yield();
             continue;
         }
@@ -188,6 +208,7 @@ static void furi_hal_flash_end_with_core2(bool erase_flag) {
 
     /* Release flash controller ownership */
     LL_HSEM_ReleaseLock(HSEM, CFG_HW_FLASH_SEMID, 0);
+    furi_hal_power_insomnia_exit();
 }
 
 static void furi_hal_flash_end(bool erase_flag) {
@@ -228,17 +249,13 @@ static void furi_hal_flush_cache(void) {
 
 bool furi_hal_flash_wait_last_operation(uint32_t timeout) {
     uint32_t error = 0;
-    uint32_t countdown = 0;
 
     /* Wait for the FLASH operation to complete by polling on BUSY flag to be reset.
        Even if the FLASH operation fails, the BUSY flag will be reset and an error
        flag will be set */
-    countdown = timeout;
+    FuriHalCortexTimer timer = furi_hal_cortex_timer_get(timeout * 1000);
     while(READ_BIT(FLASH->SR, FLASH_SR_BSY)) {
-        if(LL_SYSTICK_IsActiveCounterFlag()) {
-            countdown--;
-        }
-        if(countdown == 0) {
+        if(furi_hal_cortex_timer_is_expired(timer)) {
             return false;
         }
     }
@@ -261,12 +278,9 @@ bool furi_hal_flash_wait_last_operation(uint32_t timeout) {
     CLEAR_BIT(FLASH->SR, error);
 
     /* Wait for control register to be written */
-    countdown = timeout;
+    timer = furi_hal_cortex_timer_get(timeout * 1000);
     while(READ_BIT(FLASH->SR, FLASH_SR_CFGBSY)) {
-        if(LL_SYSTICK_IsActiveCounterFlag()) {
-            countdown--;
-        }
-        if(countdown == 0) {
+        if(furi_hal_cortex_timer_is_expired(timer)) {
             return false;
         }
     }
@@ -488,7 +502,7 @@ static const FuriHalFlashObMapping furi_hal_flash_ob_reg_map[FURI_HAL_FLASH_OB_T
     OB_REG_DEF(FuriHalFlashObInvalid, (NULL)),
     OB_REG_DEF(FuriHalFlashObInvalid, (NULL)),
 
-    OB_REG_DEF(FuriHalFlashObRegisterIPCCMail, (NULL)),
+    OB_REG_DEF(FuriHalFlashObRegisterIPCCMail, (&FLASH->IPCCBR)),
     OB_REG_DEF(FuriHalFlashObRegisterSecureFlash, (NULL)),
     OB_REG_DEF(FuriHalFlashObRegisterC2Opts, (NULL)),
 };
@@ -514,10 +528,10 @@ bool furi_hal_flash_ob_set_word(size_t word_idx, const uint32_t value) {
 
     FURI_LOG_W(
         TAG,
-        "Setting OB reg %d for word %d (addr 0x%08X) to 0x%08X",
+        "Setting OB reg %d for word %d (addr 0x%08lX) to 0x%08lX",
         reg_def->ob_reg,
         word_idx,
-        reg_def->ob_register_address,
+        (uint32_t)reg_def->ob_register_address,
         value);
 
     /* 1. Clear OPTLOCK option lock bit with the clearing sequence */
